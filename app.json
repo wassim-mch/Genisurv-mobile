@@ -3,6 +3,7 @@
     "name": "genisurv-mobile",
     "slug": "genisurv-mobile",
     "version": "1.0.0",
+    "entryPoint": "./App.js",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "genisurvmobile",
@@ -22,11 +23,10 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router",
       [
         "expo-splash-screen",
         {
