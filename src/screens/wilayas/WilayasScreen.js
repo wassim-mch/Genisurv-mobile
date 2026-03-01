@@ -8,8 +8,10 @@ import {
   TextInput,
   Alert,
   Modal,
+  ScrollView,
   StyleSheet,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import {
   getWilayas,
@@ -49,7 +51,7 @@ export default function WilayasScreen() {
   const handleSearch = (text) => {
     setSearch(text);
     const filtered = wilayas.filter((w) =>
-      w.name.toLowerCase().includes(text.toLowerCase())
+      w.nom.toLowerCase().includes(text.toLowerCase())
     );
     setFilteredWilayas(filtered);
   };
@@ -64,7 +66,7 @@ export default function WilayasScreen() {
   // ✏️ Modifier
   const openEditModal = (wilaya) => {
     setEditingWilaya(wilaya);
-    setName(wilaya.name);
+    setName(wilaya.nom);
     setModalVisible(true);
   };
 
@@ -79,10 +81,10 @@ export default function WilayasScreen() {
       setLoading(true);
 
       if (editingWilaya) {
-        await updateWilaya(editingWilaya.id, { name });
+        await updateWilaya(editingWilaya.id, { nom: name });
         Alert.alert("Succès", "Wilaya modifiée");
       } else {
-        await createWilaya({ name });
+        await createWilaya({ nom: name });
         Alert.alert("Succès", "Wilaya créée");
       }
 
@@ -134,7 +136,7 @@ export default function WilayasScreen() {
 
       {/* Ajouter */}
       <TouchableOpacity style={styles.addButton} onPress={openAddModal}>
-        <Text style={styles.addButtonText}>+ Ajouter</Text>
+        <Text style={styles.addButtonText}>+ Ajouter wilaya</Text>
       </TouchableOpacity>
 
       {/* Liste */}
@@ -143,15 +145,15 @@ export default function WilayasScreen() {
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <Text style={styles.name}>{item.name}</Text>
+            <Text style={styles.name}>{item.nom}</Text>
 
             <View style={styles.actions}>
               <TouchableOpacity onPress={() => openEditModal(item)}>
-                <Text style={styles.edit}>✏️</Text>
+                <Ionicons name="pencil" size={22} color="#2e86de" />
               </TouchableOpacity>
 
               <TouchableOpacity onPress={() => handleDelete(item.id)}>
-                <Text style={styles.delete}>❌</Text>
+                <Ionicons name="trash" size={22} color="red" />
               </TouchableOpacity>
             </View>
           </View>
@@ -160,8 +162,8 @@ export default function WilayasScreen() {
 
       {/* Modal */}
       <Modal visible={modalVisible} animationType="slide">
-        <View style={styles.modalContainer}>
-          <Text style={styles.title}>
+        <ScrollView contentContainerStyle={styles.modalContainer}>
+          <Text style={styles.modalTitle}>
             {editingWilaya ? "Modifier wilaya" : "Ajouter wilaya"}
           </Text>
 
@@ -173,37 +175,41 @@ export default function WilayasScreen() {
           />
 
           <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-            <Text style={{ color: "#fff" }}>Enregistrer</Text>
+            <Text style={styles.saveButtonText}>Enregistrer</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => setModalVisible(false)}>
-            <Text style={{ marginTop: 20 }}>Annuler</Text>
+          <TouchableOpacity
+            onPress={() => setModalVisible(false)}
+            style={styles.cancelButton}
+          >
+            <Text style={styles.cancelButtonText}>Annuler</Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       </Modal>
     </View>
   );
 }
+
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
+  container: { flex: 1, padding: 20, backgroundColor: "#f4f8fb" },
   title: { fontSize: 22, fontWeight: "bold", marginBottom: 15 },
 
   search: {
     borderWidth: 1,
     borderColor: "#ccc",
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 10,
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 15,
+    backgroundColor: "#fff",
   },
 
   addButton: {
     backgroundColor: "#2e86de",
-    padding: 10,
-    borderRadius: 8,
+    padding: 12,
+    borderRadius: 10,
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 15,
   },
-
   addButtonText: { color: "#fff", fontWeight: "bold" },
 
   card: {
@@ -213,6 +219,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
     elevation: 3,
   },
 
@@ -220,27 +231,34 @@ const styles = StyleSheet.create({
 
   actions: { flexDirection: "row", gap: 15 },
 
-  edit: { fontSize: 18 },
-  delete: { fontSize: 18, color: "red" },
+  modalContainer: { padding: 20 },
 
-  modalContainer: {
-    flex: 1,
-    padding: 20,
-    justifyContent: "center",
-  },
+  modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 15 },
 
   input: {
     borderWidth: 1,
     borderColor: "#ccc",
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 10,
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 15,
+    backgroundColor: "#fff",
   },
 
   saveButton: {
     backgroundColor: "green",
-    padding: 12,
-    borderRadius: 8,
+    padding: 14,
+    borderRadius: 10,
     alignItems: "center",
+    marginTop: 10,
   },
+  saveButtonText: { color: "#fff", fontWeight: "bold" },
+
+  cancelButton: {
+    backgroundColor: "#e74c3c",
+    padding: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  cancelButtonText: { color: "#fff", fontWeight: "bold" },
 });

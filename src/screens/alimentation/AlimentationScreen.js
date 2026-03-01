@@ -8,14 +8,16 @@ import {
   TextInput,
   Alert,
   Modal,
-  StyleSheet,
   ScrollView,
+  StyleSheet,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import {
   getAlimentations,
   createAlimentation,
   updateAlimentation,
+  deleteAlimentation,
 } from "../../services/alimentations.api";
 
 import { getCaisses } from "../../services/caisses.api";
@@ -23,7 +25,6 @@ import { getCaisses } from "../../services/caisses.api";
 export default function AlimentationScreen() {
   const [alimentations, setAlimentations] = useState([]);
   const [caisses, setCaisses] = useState([]);
-
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -43,7 +44,6 @@ export default function AlimentationScreen() {
       setLoading(true);
       const data = await getAlimentations();
       const caisseData = await getCaisses();
-
       setAlimentations(data);
       setCaisses(caisseData);
     } catch {
@@ -77,7 +77,6 @@ export default function AlimentationScreen() {
 
     try {
       setLoading(true);
-
       const payload = {
         amount: Number(form.amount),
         caisse_id: form.caisse_id,
@@ -101,6 +100,26 @@ export default function AlimentationScreen() {
     }
   };
 
+  const handleDelete = (id) => {
+    Alert.alert("Confirmation", "Supprimer cette alimentation ?", [
+      { text: "Annuler" },
+      {
+        text: "Supprimer",
+        onPress: async () => {
+          try {
+            setLoading(true);
+            await deleteAlimentation(id);
+            fetchData();
+          } catch {
+            Alert.alert("Erreur", "Erreur suppression");
+          } finally {
+            setLoading(false);
+          }
+        },
+      },
+    ]);
+  };
+
   if (loading) {
     return <ActivityIndicator size="large" style={{ marginTop: 50 }} />;
   }
@@ -113,22 +132,40 @@ export default function AlimentationScreen() {
         <Text style={styles.addButtonText}>+ Ajouter</Text>
       </TouchableOpacity>
 
+      {/* Tableau */}
+      <View style={styles.tableHeader}>
+        <Text style={[styles.cell, { flex: 2 }]}>Montant</Text>
+        <Text style={[styles.cell, { flex: 2 }]}>Caisse</Text>
+        <Text style={[styles.cell, { flex: 2 }]}>Date</Text>
+        <Text style={[styles.cell, { flex: 3 }]}>Note</Text>
+        <Text style={[styles.cell, { flex: 2 }]}>Actions</Text>
+      </View>
+
       <FlatList
         data={alimentations}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text style={styles.amount}>{item.amount} DA</Text>
-            <Text>Caisse : {item.caisse?.name}</Text>
-            <Text>Date : {item.created_at}</Text>
-            <Text>Note : {item.note}</Text>
-
-            <TouchableOpacity
-              style={styles.editBtn}
-              onPress={() => openEditModal(item)}
-            >
-              <Text style={{ color: "#fff" }}>Modifier</Text>
-            </TouchableOpacity>
+          <View style={styles.tableRow}>
+            <Text style={[styles.cell, { flex: 2, fontWeight: "bold", color: "green" }]}>
+              {item.amount} DA
+            </Text>
+            <Text style={[styles.cell, { flex: 2 }]}>
+              {item.caisse?.name || "-"}
+            </Text>
+            <Text style={[styles.cell, { flex: 2 }]}>
+              {item.created_at}
+            </Text>
+            <Text style={[styles.cell, { flex: 3 }]}>
+              {item.note || "-"}
+            </Text>
+            <View style={[styles.cell, { flex: 2, flexDirection: "row", gap: 10 }]}>
+              <TouchableOpacity onPress={() => openEditModal(item)}>
+                <Ionicons name="pencil" size={20} color="#2e86de" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleDelete(item.id)}>
+                <Ionicons name="trash" size={20} color="red" />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       />
@@ -136,7 +173,7 @@ export default function AlimentationScreen() {
       {/* Modal */}
       <Modal visible={modalVisible} animationType="slide">
         <ScrollView contentContainerStyle={styles.modalContainer}>
-          <Text style={styles.title}>
+          <Text style={styles.modalTitle}>
             {editingItem ? "Modifier" : "Nouvelle"} Alimentation
           </Text>
 
@@ -145,26 +182,17 @@ export default function AlimentationScreen() {
             placeholder="Montant"
             keyboardType="numeric"
             value={form.amount}
-            onChangeText={(text) =>
-              setForm({ ...form, amount: text })
-            }
+            onChangeText={(text) => setForm({ ...form, amount: text })}
           />
 
-          <Text style={{ fontWeight: "bold", marginTop: 10 }}>
-            Sélectionner Caisse
-          </Text>
-
+          <Text style={{ fontWeight: "bold", marginBottom: 8 }}>Sélectionner Caisse</Text>
           {caisses.map((c) => (
             <TouchableOpacity
               key={c.id}
-              onPress={() =>
-                setForm({ ...form, caisse_id: c.id })
-              }
+              onPress={() => setForm({ ...form, caisse_id: c.id })}
               style={styles.caisseItem}
             >
-              <Text>
-                {form.caisse_id === c.id ? "☑️" : "⬜"} {c.name}
-              </Text>
+              <Text>{form.caisse_id === c.id ? "☑️" : "⬜"} {c.name}</Text>
             </TouchableOpacity>
           ))}
 
@@ -172,84 +200,87 @@ export default function AlimentationScreen() {
             style={styles.input}
             placeholder="Observation"
             value={form.note}
-            onChangeText={(text) =>
-              setForm({ ...form, note: text })
-            }
+            onChangeText={(text) => setForm({ ...form, note: text })}
           />
 
-          <TouchableOpacity
-            style={styles.saveButton}
-            onPress={handleSave}
-          >
-            <Text style={{ color: "#fff" }}>Enregistrer</Text>
+          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+            <Text style={styles.saveButtonText}>Enregistrer</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => setModalVisible(false)}>
-            <Text style={{ marginTop: 20 }}>Annuler</Text>
+          <TouchableOpacity
+            onPress={() => setModalVisible(false)}
+            style={styles.cancelButton}
+          >
+            <Text style={styles.cancelButtonText}>Annuler</Text>
           </TouchableOpacity>
         </ScrollView>
       </Modal>
     </View>
   );
 }
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
 
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 20, backgroundColor: "#f4f8fb" },
   title: { fontSize: 22, fontWeight: "bold", marginBottom: 15 },
 
   addButton: {
     backgroundColor: "#2e86de",
-    padding: 10,
-    borderRadius: 8,
+    padding: 12,
+    borderRadius: 10,
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 15,
   },
-
   addButtonText: { color: "#fff", fontWeight: "bold" },
 
-  card: {
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#dcdde1",
+    paddingVertical: 10,
+    paddingHorizontal: 5,
+    borderRadius: 8,
+    marginBottom: 5,
+  },
+  tableRow: {
+    flexDirection: "row",
     backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 12,
-    elevation: 3,
-  },
-
-  amount: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "green",
-  },
-
-  editBtn: {
-    marginTop: 10,
-    backgroundColor: "#f39c12",
-    padding: 6,
-    borderRadius: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 5,
+    borderRadius: 8,
+    marginBottom: 5,
     alignItems: "center",
+    elevation: 2,
   },
+  cell: { paddingHorizontal: 5, fontSize: 14 },
 
-  modalContainer: {
-    padding: 20,
-  },
+  modalContainer: { padding: 20 },
+  modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 15 },
 
   input: {
     borderWidth: 1,
     borderColor: "#ccc",
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 10,
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 15,
+    backgroundColor: "#fff",
   },
 
-  caisseItem: {
-    paddingVertical: 6,
-  },
+  caisseItem: { paddingVertical: 6 },
 
   saveButton: {
     backgroundColor: "green",
-    padding: 12,
-    borderRadius: 8,
+    padding: 14,
+    borderRadius: 10,
     alignItems: "center",
-    marginTop: 20,
+    marginTop: 10,
   },
+  saveButtonText: { color: "#fff", fontWeight: "bold" },
+
+  cancelButton: {
+    backgroundColor: "#e74c3c",
+    padding: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  cancelButtonText: { color: "#fff", fontWeight: "bold" },
 });

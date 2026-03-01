@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  ScrollView,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import { getCaisses, getMyCaisse } from "../../services/caisses.api";
 import { AuthContext } from "../../context/AuthContext";
@@ -28,7 +30,7 @@ export default function CaissesScreen() {
 
       if (user?.role === "Gestionnaire") {
         const data = await getMyCaisse();
-        setCaisses([data]); // transforme en array
+        setCaisses([data]);
       } else {
         const data = await getCaisses();
         setCaisses(data);
@@ -48,51 +50,86 @@ export default function CaissesScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Gestion des Caisses</Text>
 
-      <FlatList
-        data={caisses}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View>
-              <Text style={styles.name}>{item.name}</Text>
-
-              <Text style={styles.info}>
-                Wilaya : {item.wilaya?.name || "-"}
-              </Text>
-
-              <Text style={styles.info}>
-                Solde actuel : {item.balance ?? 0} DA
-              </Text>
-
-              <Text
-                style={[
-                  styles.status,
-                  {
-                    color:
-                      item.status === "active" ? "green" : "red",
-                  },
-                ]}
-              >
-                {item.status}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.detailsButton}
-              onPress={() =>
-                Alert.alert("Détails", `Caisse: ${item.name}`)
-              }
-            >
-              <Text style={{ color: "#fff" }}>Voir</Text>
-            </TouchableOpacity>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View>
+          {/* Header Tableau */}
+          <View style={styles.tableHeader}>
+            <Text style={[styles.headerCell, { width: 150 }]}>Nom</Text>
+            <Text style={[styles.headerCell, { width: 120 }]}>Wilaya</Text>
+            <Text style={[styles.headerCell, { width: 120 }]}>Solde</Text>
+            <Text style={[styles.headerCell, { width: 100 }]}>Statut</Text>
+            <Text style={[styles.headerCell, { width: 80 }]}>Action</Text>
           </View>
-        )}
-      />
+
+          <FlatList
+            data={caisses}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={({ item }) => (
+              <View style={styles.tableRow}>
+                <Text style={[styles.cell, { width: 150 }]}>
+                  {item.name}
+                </Text>
+
+                <Text style={[styles.cell, { width: 120 }]}>
+                  {item.wilaya?.nom || "-"}
+                </Text>
+
+                <Text style={[styles.cell, { width: 120 }]}>
+                  {item.balance ?? 0} DA
+                </Text>
+
+                <Text
+                  style={[
+                    styles.cell,
+                    {
+                      width: 100,
+                      color:
+                        item.status === "active"
+                          ? "green"
+                          : "red",
+                      fontWeight: "bold",
+                    },
+                  ]}
+                >
+                  {item.status}
+                </Text>
+
+                <View
+                  style={[
+                    styles.cell,
+                    { width: 80, flexDirection: "row" },
+                  ]}
+                >
+                  <TouchableOpacity
+                    onPress={() =>
+                      Alert.alert(
+                        "Détails",
+                        `Caisse : ${item.name}`
+                      )
+                    }
+                  >
+                    <Ionicons
+                      name="eye-outline"
+                      size={20}
+                      color="#2e86de"
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          />
+        </View>
+      </ScrollView>
     </View>
   );
 }
+
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
+  container: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: "#f4f8fb",
+  },
 
   title: {
     fontSize: 22,
@@ -100,35 +137,30 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
 
-  card: {
-    backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 12,
-    elevation: 3,
-  },
-
-  name: {
-    fontWeight: "bold",
-    fontSize: 16,
-    marginBottom: 5,
-  },
-
-  info: {
-    fontSize: 13,
-    color: "#555",
-  },
-
-  status: {
-    marginTop: 5,
-    fontWeight: "bold",
-  },
-
-  detailsButton: {
-    marginTop: 10,
+  /* TABLE */
+  tableHeader: {
+    flexDirection: "row",
     backgroundColor: "#2e86de",
-    padding: 8,
-    borderRadius: 6,
-    alignItems: "center",
+    paddingVertical: 12,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+  },
+
+  headerCell: {
+    color: "#fff",
+    fontWeight: "bold",
+    paddingHorizontal: 10,
+  },
+
+  tableRow: {
+    flexDirection: "row",
+    backgroundColor: "#fff",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+
+  cell: {
+    paddingHorizontal: 10,
   },
 });

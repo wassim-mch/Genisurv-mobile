@@ -11,28 +11,28 @@ import {
   StyleSheet,
   ScrollView,
 } from "react-native";
+import { usePermissions } from "../../hooks/usePermissions"; // ton hook AsyncStorage
 
 import {
   getRoles,
   createRole,
   updateRole,
   deleteRole,
-  getPermissions,
 } from "../../services/roles.api";
 
 export default function RolesScreen() {
   const [roles, setRoles] = useState([]);
-  const [permissionsList, setPermissionsList] = useState([]);
   const [selectedPermissions, setSelectedPermissions] = useState([]);
-
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingRole, setEditingRole] = useState(null);
   const [name, setName] = useState("");
 
+  // Permissions de l'utilisateur connecté depuis AsyncStorage
+  const permissionsList = usePermissions();
+
   useEffect(() => {
     fetchRoles();
-    fetchPermissions();
   }, []);
 
   const fetchRoles = async () => {
@@ -40,19 +40,10 @@ export default function RolesScreen() {
       setLoading(true);
       const data = await getRoles();
       setRoles(data);
-    } catch {
+    } catch (err) {
       Alert.alert("Erreur", "Impossible de charger les rôles");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchPermissions = async () => {
-    try {
-      const perms = await getPermissions();
-      setPermissionsList(perms);
-    } catch {
-      Alert.alert("Erreur", "Impossible de charger les permissions");
     }
   };
 
@@ -65,7 +56,7 @@ export default function RolesScreen() {
 
   const openEditModal = (role) => {
     setEditingRole(role);
-    setName(role.name);
+    setName(role.nom || role.name);
     setSelectedPermissions(role.permissions || []);
     setModalVisible(true);
   };
@@ -80,27 +71,25 @@ export default function RolesScreen() {
 
   const handleSave = async () => {
     if (!name) {
-      Alert.alert("Validation", "Nom obligatoire");
+      Alert.alert("Validation", "Nom du rôle obligatoire");
       return;
     }
 
     try {
       setLoading(true);
-
       if (editingRole) {
         await updateRole(editingRole.id, {
-          name,
+          nom: name,
           permissions: selectedPermissions,
         });
         Alert.alert("Succès", "Rôle modifié");
       } else {
         await createRole({
-          name,
+          nom: name,
           permissions: selectedPermissions,
         });
         Alert.alert("Succès", "Rôle créé");
       }
-
       setModalVisible(false);
       fetchRoles();
     } catch (err) {
@@ -121,7 +110,7 @@ export default function RolesScreen() {
             await deleteRole(id);
             fetchRoles();
           } catch {
-            Alert.alert("Erreur", "Erreur suppression");
+            Alert.alert("Erreur", "Erreur lors de la suppression");
           } finally {
             setLoading(false);
           }
@@ -148,8 +137,8 @@ export default function RolesScreen() {
         renderItem={({ item }) => (
           <View style={styles.card}>
             <View>
-              <Text style={styles.name}>{item.name}</Text>
-              <Text style={{ fontSize: 12, color: "#666" }}>
+              <Text style={styles.name}>{item.nom || item.name}</Text>
+              <Text style={styles.permissionsText}>
                 {item.permissions?.join(", ")}
               </Text>
             </View>
@@ -181,9 +170,7 @@ export default function RolesScreen() {
             onChangeText={setName}
           />
 
-          <Text style={{ fontWeight: "bold", marginTop: 10 }}>
-            Permissions
-          </Text>
+          <Text style={styles.permissionsTitle}>Permissions</Text>
 
           {permissionsList.map((perm) => (
             <TouchableOpacity
@@ -191,37 +178,40 @@ export default function RolesScreen() {
               style={styles.permissionItem}
               onPress={() => togglePermission(perm)}
             >
-              <Text>
+              <Text style={styles.permissionText}>
                 {selectedPermissions.includes(perm) ? "☑️" : "⬜"} {perm}
               </Text>
             </TouchableOpacity>
           ))}
 
           <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-            <Text style={{ color: "#fff" }}>Enregistrer</Text>
+            <Text style={styles.saveButtonText}>Enregistrer</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => setModalVisible(false)}>
-            <Text style={{ marginTop: 20 }}>Annuler</Text>
+          <TouchableOpacity
+            onPress={() => setModalVisible(false)}
+            style={styles.cancelButton}
+          >
+            <Text style={styles.cancelButtonText}>Annuler</Text>
           </TouchableOpacity>
         </ScrollView>
       </Modal>
     </View>
   );
 }
+
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  title: { fontSize: 22, fontWeight: "bold", marginBottom: 15 },
+  container: { flex: 1, padding: 20, backgroundColor: "#f4f8fb" },
+  title: { fontSize: 22, fontFamily: "Poppins-Bold", marginBottom: 15 },
 
   addButton: {
     backgroundColor: "#2e86de",
-    padding: 10,
-    borderRadius: 8,
+    padding: 12,
+    borderRadius: 10,
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 15,
   },
-
-  addButtonText: { color: "#fff", fontWeight: "bold" },
+  addButtonText: { color: "#fff", fontFamily: "Poppins-Bold" },
 
   card: {
     backgroundColor: "#fff",
@@ -230,37 +220,50 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     flexDirection: "row",
     justifyContent: "space-between",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
     elevation: 3,
   },
 
-  name: { fontWeight: "bold", fontSize: 16 },
+  name: { fontWeight: "bold", fontSize: 16, fontFamily: "Poppins-Bold" },
+  permissionsText: { fontSize: 12, color: "#666", fontFamily: "Poppins-Regular" },
 
   actions: { flexDirection: "row", gap: 15 },
-
   edit: { fontSize: 18 },
   delete: { fontSize: 18, color: "red" },
 
-  modalContainer: {
-    padding: 20,
-  },
+  modalContainer: { padding: 20 },
 
   input: {
     borderWidth: 1,
     borderColor: "#ccc",
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 10,
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 15,
+    fontFamily: "Poppins-Regular",
   },
 
-  permissionItem: {
-    paddingVertical: 6,
-  },
+  permissionsTitle: { fontWeight: "bold", marginBottom: 10, fontFamily: "Poppins-Bold" },
+  permissionItem: { paddingVertical: 6 },
+  permissionText: { fontFamily: "Poppins-Regular" },
 
   saveButton: {
     backgroundColor: "green",
-    padding: 12,
-    borderRadius: 8,
+    padding: 14,
+    borderRadius: 10,
     alignItems: "center",
     marginTop: 20,
   },
+  saveButtonText: { color: "#fff", fontFamily: "Poppins-Bold" },
+
+  cancelButton: {
+    backgroundColor: "#e74c3c",
+    padding: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  cancelButtonText: { color: "#fff", fontFamily: "Poppins-Bold" },
 });
