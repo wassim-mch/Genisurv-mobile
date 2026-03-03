@@ -11,14 +11,10 @@ import {
   StyleSheet,
   ScrollView,
 } from "react-native";
-import { usePermissions } from "../../hooks/usePermissions"; // ton hook AsyncStorage
+import { Ionicons } from "@expo/vector-icons";
+import { usePermissions } from "../../hooks/usePermissions";
 
-import {
-  getRoles,
-  createRole,
-  updateRole,
-  deleteRole,
-} from "../../services/roles.api";
+import { getRoles, createRole, updateRole, deleteRole } from "../../services/roles.api";
 
 export default function RolesScreen() {
   const [roles, setRoles] = useState([]);
@@ -28,7 +24,6 @@ export default function RolesScreen() {
   const [editingRole, setEditingRole] = useState(null);
   const [name, setName] = useState("");
 
-  // Permissions de l'utilisateur connecté depuis AsyncStorage
   const permissionsList = usePermissions();
 
   useEffect(() => {
@@ -63,9 +58,7 @@ export default function RolesScreen() {
 
   const togglePermission = (perm) => {
     setSelectedPermissions((prev) =>
-      prev.includes(perm)
-        ? prev.filter((p) => p !== perm)
-        : [...prev, perm]
+      prev.includes(perm) ? prev.filter((p) => p !== perm) : [...prev, perm]
     );
   };
 
@@ -78,16 +71,10 @@ export default function RolesScreen() {
     try {
       setLoading(true);
       if (editingRole) {
-        await updateRole(editingRole.id, {
-          nom: name,
-          permissions: selectedPermissions,
-        });
+        await updateRole(editingRole.id, { name, permissions: selectedPermissions });
         Alert.alert("Succès", "Rôle modifié");
       } else {
-        await createRole({
-          nom: name,
-          permissions: selectedPermissions,
-        });
+        await createRole({ name, permissions: selectedPermissions });
         Alert.alert("Succès", "Rôle créé");
       }
       setModalVisible(false);
@@ -128,7 +115,8 @@ export default function RolesScreen() {
       <Text style={styles.title}>Gestion des rôles</Text>
 
       <TouchableOpacity style={styles.addButton} onPress={openAddModal}>
-        <Text style={styles.addButtonText}>+ Ajouter rôle</Text>
+        <Ionicons name="add-circle-outline" size={20} color="#fff" />
+        <Text style={styles.addButtonText}> Ajouter rôle</Text>
       </TouchableOpacity>
 
       <FlatList
@@ -136,7 +124,7 @@ export default function RolesScreen() {
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.name}>{item.nom || item.name}</Text>
               <Text style={styles.permissionsText}>
                 {item.permissions?.join(", ")}
@@ -145,11 +133,11 @@ export default function RolesScreen() {
 
             <View style={styles.actions}>
               <TouchableOpacity onPress={() => openEditModal(item)}>
-                <Text style={styles.edit}>✏️</Text>
+                <Ionicons name="pencil-outline" size={24} color="#2e86de" />
               </TouchableOpacity>
 
               <TouchableOpacity onPress={() => handleDelete(item.id)}>
-                <Text style={styles.delete}>❌</Text>
+                <Ionicons name="trash-outline" size={24} color="red" />
               </TouchableOpacity>
             </View>
           </View>
@@ -157,61 +145,64 @@ export default function RolesScreen() {
       />
 
       {/* Modal */}
-      <Modal visible={modalVisible} animationType="slide">
-        <ScrollView contentContainerStyle={styles.modalContainer}>
-          <Text style={styles.title}>
-            {editingRole ? "Modifier rôle" : "Ajouter rôle"}
-          </Text>
+      <Modal visible={modalVisible} animationType="slide" transparent={true}>
+        <View style={styles.modalBackground}>
+          <ScrollView contentContainerStyle={styles.modalContainer}>
+            <Text style={styles.title}>
+              {editingRole ? "Modifier rôle" : "Ajouter rôle"}
+            </Text>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Nom du rôle"
-            value={name}
-            onChangeText={setName}
-          />
+            <TextInput
+              style={styles.input}
+              placeholder="Nom du rôle"
+              value={name}
+              onChangeText={setName}
+            />
 
-          <Text style={styles.permissionsTitle}>Permissions</Text>
+            <Text style={styles.permissionsTitle}>Permissions</Text>
 
-          {permissionsList.map((perm) => (
-            <TouchableOpacity
-              key={perm}
-              style={styles.permissionItem}
-              onPress={() => togglePermission(perm)}
-            >
-              <Text style={styles.permissionText}>
-                {selectedPermissions.includes(perm) ? "☑️" : "⬜"} {perm}
-              </Text>
+            {permissionsList.map((perm) => (
+              <TouchableOpacity
+                key={perm}
+                style={styles.permissionItem}
+                onPress={() => togglePermission(perm)}
+              >
+                <Text style={styles.permissionText}>
+                  {selectedPermissions.includes(perm) ? "✅" : "⬜"} {perm}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+              <Text style={styles.saveButtonText}>Enregistrer</Text>
             </TouchableOpacity>
-          ))}
 
-          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-            <Text style={styles.saveButtonText}>Enregistrer</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => setModalVisible(false)}
-            style={styles.cancelButton}
-          >
-            <Text style={styles.cancelButtonText}>Annuler</Text>
-          </TouchableOpacity>
-        </ScrollView>
+            <TouchableOpacity
+              onPress={() => setModalVisible(false)}
+              style={styles.cancelButton}
+            >
+              <Text style={styles.cancelButtonText}>Annuler</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
       </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: "#f4f8fb" },
-  title: { fontSize: 22, fontFamily: "Poppins-Bold", marginBottom: 15 },
+  container: { flex: 1, padding: 20, backgroundColor: "#f0f4f8" },
+  title: { fontSize: 24, fontWeight: "bold", marginBottom: 15 },
 
   addButton: {
+    flexDirection: "row",
     backgroundColor: "#2e86de",
     padding: 12,
     borderRadius: 10,
     alignItems: "center",
     marginBottom: 15,
   },
-  addButtonText: { color: "#fff", fontFamily: "Poppins-Bold" },
+  addButtonText: { color: "#fff", fontWeight: "bold", marginLeft: 5 },
 
   card: {
     backgroundColor: "#fff",
@@ -219,22 +210,30 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
     flexDirection: "row",
-    justifyContent: "space-between",
+    alignItems: "center",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
     elevation: 3,
   },
 
-  name: { fontWeight: "bold", fontSize: 16, fontFamily: "Poppins-Bold" },
-  permissionsText: { fontSize: 12, color: "#666", fontFamily: "Poppins-Regular" },
+  name: { fontWeight: "bold", fontSize: 16, marginBottom: 4 },
+  permissionsText: { fontSize: 12, color: "#666" },
 
   actions: { flexDirection: "row", gap: 15 },
-  edit: { fontSize: 18 },
-  delete: { fontSize: 18, color: "red" },
 
-  modalContainer: { padding: 20 },
+  modalBackground: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+  },
+  modalContainer: {
+    backgroundColor: "#fff",
+    margin: 20,
+    padding: 20,
+    borderRadius: 12,
+  },
 
   input: {
     borderWidth: 1,
@@ -242,12 +241,11 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 10,
     marginBottom: 15,
-    fontFamily: "Poppins-Regular",
   },
 
-  permissionsTitle: { fontWeight: "bold", marginBottom: 10, fontFamily: "Poppins-Bold" },
+  permissionsTitle: { fontWeight: "bold", marginBottom: 10 },
   permissionItem: { paddingVertical: 6 },
-  permissionText: { fontFamily: "Poppins-Regular" },
+  permissionText: { fontSize: 14 },
 
   saveButton: {
     backgroundColor: "green",
@@ -256,7 +254,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 20,
   },
-  saveButtonText: { color: "#fff", fontFamily: "Poppins-Bold" },
+  saveButtonText: { color: "#fff", fontWeight: "bold" },
 
   cancelButton: {
     backgroundColor: "#e74c3c",
@@ -265,5 +263,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 10,
   },
-  cancelButtonText: { color: "#fff", fontFamily: "Poppins-Bold" },
+  cancelButtonText: { color: "#fff", fontWeight: "bold" },
 });

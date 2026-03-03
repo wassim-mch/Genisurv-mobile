@@ -13,7 +13,12 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
 
-import { getUsers, createUser, updateUser, deleteUser } from "../../services/users.api";
+import {
+  getUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+} from "../../services/users.api";
 import { getRoles } from "../../services/roles.api";
 import { getWilayas } from "../../services/wilayas.api";
 
@@ -31,8 +36,8 @@ export default function UsersScreen() {
   const [form, setForm] = useState({
     nom: "",
     email: "",
-    role: "",
-    wilaya: "",
+    role_id: "",
+    wilaya_id: "",
     password: "",
     confirmPassword: "",
   });
@@ -59,17 +64,14 @@ export default function UsersScreen() {
     }
   };
 
-  // Recherche avancée
   const handleSearch = (text) => {
     setSearch(text);
-
     const filtered = users.filter((u) =>
-      u.nom.toLowerCase().includes(text.toLowerCase()) ||
-      u.email.toLowerCase().includes(text.toLowerCase()) ||
-      (u.role || "").toLowerCase().includes(text.toLowerCase()) ||
-      (u.wilaya || "").toLowerCase().includes(text.toLowerCase())
+      u.nom?.toLowerCase().includes(text.toLowerCase()) ||
+      u.email?.toLowerCase().includes(text.toLowerCase()) ||
+      u.role?.toLowerCase().includes(text.toLowerCase()) ||
+      (u.wilaya?.toLowerCase() || "").includes(text.toLowerCase())
     );
-
     setFilteredUsers(filtered);
   };
 
@@ -78,8 +80,8 @@ export default function UsersScreen() {
     setForm({
       nom: "",
       email: "",
-      role: "",
-      wilaya: "",
+      role_id: "",
+      wilaya_id: "",
       password: "",
       confirmPassword: "",
     });
@@ -87,12 +89,14 @@ export default function UsersScreen() {
   };
 
   const openEditModal = (user) => {
+    const roleObj = roles.find((r) => r.nom === user.role);
+    const wilayaObj = wilayas.find((w) => w.nom === user.wilaya);
     setEditingUser(user);
     setForm({
       nom: user.nom,
       email: user.email,
-      role: user.role,
-      wilaya: user.wilaya,
+      role_id: roleObj ? roleObj.id : "",
+      wilaya_id: wilayaObj ? wilayaObj.id : "",
       password: "",
       confirmPassword: "",
     });
@@ -100,22 +104,40 @@ export default function UsersScreen() {
   };
 
   const handleSave = async () => {
+    if (!form.nom || !form.email || !form.role_id) {
+      Alert.alert("Erreur", "Nom, email et rôle sont obligatoires");
+      return;
+    }
     if (!editingUser && form.password !== form.confirmPassword) {
       Alert.alert("Erreur", "Les mots de passe ne correspondent pas");
       return;
     }
 
     try {
+      const dataToSend = {
+        name: form.nom, // ⚠️ nom → name pour Laravel
+        email: form.email,
+        role_id: form.role_id,
+        wilaya_id: form.wilaya_id || null,
+        ...(form.password && { password: form.password }), // envoyer password uniquement si ajouté
+      };
+
       if (editingUser) {
-        await updateUser(editingUser.id, form);
+        await updateUser(editingUser.id, dataToSend);
       } else {
-        await createUser(form);
+        await createUser(dataToSend);
       }
 
+      Alert.alert("Succès", "Utilisateur enregistré !");
       setModalVisible(false);
       fetchData();
     } catch (error) {
-      Alert.alert("Erreur", "Erreur lors de l'enregistrement");
+      console.log("ERREUR COMPLETE:", error.response?.data);
+      Alert.alert(
+        "Erreur",
+        error.response?.data?.message ||
+          JSON.stringify(error.response?.data?.errors)
+      );
     }
   };
 
@@ -132,19 +154,15 @@ export default function UsersScreen() {
     ]);
   };
 
-  if (loading) {
-    return <ActivityIndicator size="large" style={{ marginTop: 50 }} />;
-  }
+  if (loading) return <ActivityIndicator size="large" style={{ marginTop: 50 }} />;
 
   return (
     <View style={styles.container}>
-      {/* TITRE CENTRÉ */}
       <View style={styles.header}>
         <Ionicons name="people-outline" size={24} color="#2e86de" />
         <Text style={styles.title}>Gestion des utilisateurs</Text>
       </View>
 
-      {/* Recherche */}
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color="#2e86de" />
         <TextInput
@@ -155,29 +173,26 @@ export default function UsersScreen() {
         />
       </View>
 
-      {/* Ajouter */}
       <TouchableOpacity style={styles.addButton} onPress={openAddModal}>
         <Ionicons name="add-circle-outline" size={20} color="#fff" />
         <Text style={styles.addButtonText}> Ajouter</Text>
       </TouchableOpacity>
 
-      {/* TABLEAU */}
       <ScrollView horizontal>
         <View style={styles.tableContainer}>
           <View style={styles.tableHeader}>
             {[
-              {label:"ID", icon:"hash-outline"},
-              {label:"Nom", icon:"person-outline"},
-              {label:"Email", icon:"mail-outline"},
-              {label:"Status", icon:"checkmark-circle-outline"},
-              {label:"Mot de passe", icon:"lock-closed-outline"},
-              {label:"Role", icon:"ribbon-outline"},
-              {label:"Wilaya", icon:"location-outline"},
-              {label:"Action", icon:"settings-outline"}
-            ].map((h,i)=>(
+              "ID",
+              "Nom",
+              "Email",
+              "Status",
+              "Mot de passe",
+              "Role",
+              "Wilaya",
+              "Action",
+            ].map((h, i) => (
               <View key={i} style={styles.th}>
-                <Ionicons name={h.icon} size={16} color="#2e86de" />
-                <Text style={styles.thText}>{h.label}</Text>
+                <Text style={styles.thText}>{h}</Text>
               </View>
             ))}
           </View>
@@ -187,21 +202,16 @@ export default function UsersScreen() {
               <Text style={styles.td}>{item.id}</Text>
               <Text style={styles.td}>{item.nom}</Text>
               <Text style={styles.td}>{item.email}</Text>
-              <Text style={[
-                styles.td,
-                { color: item.email_verification ? "green" : "red" }
-              ]}>
+              <Text style={[styles.td, { color: item.email_verification ? "green" : "red" }]}>
                 {item.email_verification ? "Vérifié" : "Non vérifié"}
               </Text>
               <Text style={styles.td}>********</Text>
               <Text style={styles.td}>{item.role}</Text>
               <Text style={styles.td}>{item.wilaya || "-"}</Text>
-
               <View style={styles.actions}>
                 <TouchableOpacity onPress={() => openEditModal(item)}>
                   <Ionicons name="create-outline" size={20} color="#2e86de" />
                 </TouchableOpacity>
-
                 <TouchableOpacity onPress={() => handleDelete(item.id)}>
                   <Ionicons name="trash-outline" size={20} color="red" />
                 </TouchableOpacity>
@@ -211,65 +221,55 @@ export default function UsersScreen() {
         </View>
       </ScrollView>
 
-      {/* MODAL */}
       <Modal visible={modalVisible} animationType="slide">
         <ScrollView style={{ padding: 20 }}>
           <Text style={styles.modalTitle}>
             {editingUser ? "Modifier utilisateur" : "Ajouter utilisateur"}
           </Text>
 
-          {/* Nom */}
-          {renderInput("person-outline","Nom","nom")}
+          {renderInput("person-outline", "Nom", "nom")}
+          {renderInput("mail-outline", "Email", "email")}
 
-          {/* Email */}
-          {renderInput("mail-outline","Email","email")}
-
-          {/* Role */}
           <View style={styles.inputContainer}>
             <Ionicons name="ribbon-outline" size={20} color="#2e86de" />
             <Picker
-              selectedValue={form.role}
+              selectedValue={form.role_id}
               style={styles.picker}
-              onValueChange={(value) => setForm({ ...form, role: value })}
+              onValueChange={(value) => setForm({ ...form, role_id: value })}
             >
               <Picker.Item label="Sélectionner un role" value="" />
               {roles.map((r) => (
-                <Picker.Item key={r.id} label={r.nom} value={r.nom} />
+                <Picker.Item key={r.id} label={r.nom} value={r.id} />
               ))}
             </Picker>
           </View>
 
-          {/* Wilaya */}
           <View style={styles.inputContainer}>
             <Ionicons name="location-outline" size={20} color="#2e86de" />
             <Picker
-              selectedValue={form.wilaya}
+              selectedValue={form.wilaya_id}
               style={styles.picker}
-              onValueChange={(value) => setForm({ ...form, wilaya: value })}
+              onValueChange={(value) => setForm({ ...form, wilaya_id: value })}
             >
               <Picker.Item label="Sélectionner une wilaya" value="" />
               {wilayas.map((w) => (
-                <Picker.Item key={w.id} label={w.nom} value={w.nom} />
+                <Picker.Item key={w.id} label={w.nom} value={w.id} />
               ))}
             </Picker>
           </View>
 
           {!editingUser && (
             <>
-              {renderInput("lock-closed-outline","Mot de passe","password",true)}
-              {renderInput("lock-closed-outline","Confirmer mot de passe","confirmPassword",true)}
+              {renderInput("lock-closed-outline", "Mot de passe", "password", true)}
+              {renderInput("lock-closed-outline", "Confirmer mot de passe", "confirmPassword", true)}
             </>
           )}
 
-          {/* Boutons */}
           <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
             <Text style={styles.saveText}>Enregistrer</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={() => setModalVisible(false)}
-          >
+          <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
             <Text style={styles.cancelText}>Annuler</Text>
           </TouchableOpacity>
         </ScrollView>
@@ -277,7 +277,7 @@ export default function UsersScreen() {
     </View>
   );
 
-  function renderInput(icon, placeholder, field, secure=false) {
+  function renderInput(icon, placeholder, field, secure = false) {
     return (
       <View style={styles.inputContainer}>
         <Ionicons name={icon} size={20} color="#2e86de" />
@@ -294,26 +294,26 @@ export default function UsersScreen() {
 }
 
 const styles = StyleSheet.create({
-  container:{flex:1,padding:20,backgroundColor:"#f4f8fb"},
-  header:{flexDirection:"row",alignItems:"center",justifyContent:"center",marginBottom:15,gap:10},
-  title:{fontSize:22,fontFamily:"Poppins-Bold",color:"#2e86de"},
-  searchContainer:{flexDirection:"row",alignItems:"center",borderWidth:1,borderColor:"#d6e6f9",padding:10,borderRadius:10,marginBottom:10},
-  search:{marginLeft:10,flex:1,fontFamily:"Poppins-Regular"},
-  addButton:{flexDirection:"row",backgroundColor:"#2e86de",padding:12,borderRadius:10,alignItems:"center",justifyContent:"center",marginBottom:15},
-  addButtonText:{color:"#fff",fontFamily:"Poppins-Bold"},
-  tableContainer:{borderWidth:1,borderColor:"#d6e6f9",borderRadius:10,shadowColor:"#000",shadowOffset:{width:0,height:2},shadowOpacity:0.2,shadowRadius:4,elevation:5,backgroundColor:"#fff"},
-  tableHeader:{flexDirection:"row",backgroundColor:"#d6e6f9",padding:10,borderTopLeftRadius:10,borderTopRightRadius:10},
-  th:{width:120,flexDirection:"row",alignItems:"center",gap:5},
-  thText:{fontFamily:"Poppins-Bold",color:"#2e86de"},
-  tableRow:{flexDirection:"row",padding:10,borderBottomWidth:1,borderColor:"#eee",alignItems:"center"},
-  td:{width:120,fontFamily:"Poppins-Regular",color:"#000"},
-  actions:{flexDirection:"row",gap:15},
-  inputContainer:{flexDirection:"row",alignItems:"center",borderWidth:1,borderColor:"#ccc",padding:10,borderRadius:10,marginBottom:10},
-  input:{marginLeft:10,flex:1,fontFamily:"Poppins-Regular"},
-  picker:{flex:1},
-  modalTitle:{fontSize:20,fontFamily:"Poppins-Bold",marginBottom:15,textAlign:"center",color:"#2e86de"},
-  saveButton:{backgroundColor:"green",padding:14,borderRadius:10,alignItems:"center",marginTop:10},
-  saveText:{color:"#fff",fontFamily:"Poppins-Bold"},
-  cancelButton:{backgroundColor:"red",padding:14,borderRadius:10,alignItems:"center",marginTop:10},
-  cancelText:{color:"#fff",fontFamily:"Poppins-Bold"},
+  container: { flex: 1, padding: 20, backgroundColor: "#f4f8fb" },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 15, gap: 10 },
+  title: { fontSize: 22, fontFamily: "Poppins-Bold", color: "#2e86de" },
+  searchContainer: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#d6e6f9", padding: 10, borderRadius: 10, marginBottom: 10 },
+  search: { marginLeft: 10, flex: 1, fontFamily: "Poppins-Regular" },
+  addButton: { flexDirection: "row", backgroundColor: "#2e86de", padding: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", marginBottom: 15 },
+  addButtonText: { color: "#fff", fontFamily: "Poppins-Bold" },
+  tableContainer: { borderWidth: 1, borderColor: "#d6e6f9", borderRadius: 10, backgroundColor: "#fff" },
+  tableHeader: { flexDirection: "row", backgroundColor: "#d6e6f9", padding: 10 },
+  th: { width: 120 },
+  thText: { fontFamily: "Poppins-Bold", color: "#2e86de" },
+  tableRow: { flexDirection: "row", padding: 10, borderBottomWidth: 1, borderColor: "#eee" },
+  td: { width: 120, fontFamily: "Poppins-Regular", color: "#000" },
+  actions: { flexDirection: "row", gap: 15 },
+  inputContainer: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#ccc", padding: 10, borderRadius: 10, marginBottom: 10 },
+  input: { marginLeft: 10, flex: 1, fontFamily: "Poppins-Regular" },
+  picker: { flex: 1 },
+  modalTitle: { fontSize: 20, fontFamily: "Poppins-Bold", marginBottom: 15, textAlign: "center", color: "#2e86de" },
+  saveButton: { backgroundColor: "green", padding: 14, borderRadius: 10, alignItems: "center", marginTop: 10 },
+  saveText: { color: "#fff", fontFamily: "Poppins-Bold" },
+  cancelButton: { backgroundColor: "red", padding: 14, borderRadius: 10, alignItems: "center", marginTop: 10 },
+  cancelText: { color: "#fff", fontFamily: "Poppins-Bold" },
 });

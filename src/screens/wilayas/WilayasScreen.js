@@ -34,18 +34,24 @@ export default function WilayasScreen() {
     fetchWilayas();
   }, []);
 
+  // 🔄 Charger les wilayas
   const fetchWilayas = async () => {
-    try {
-      setLoading(true);
-      const data = await getWilayas();
-      setWilayas(data);
-      setFilteredWilayas(data);
-    } catch {
-      Alert.alert("Erreur", "Impossible de charger les wilayas");
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    setLoading(true);
+    const data = await getWilayas();
+    console.log("Data API:", data); // <== ça va te montrer ce qui arrive
+
+    // Vérifie si c'est data.wilayas ou data directement
+    const wilayaList = data.wilayas || data;
+    setWilayas(wilayaList);
+    setFilteredWilayas(wilayaList);
+  } catch (err) {
+    Alert.alert("Erreur", "Impossible de charger les wilayas");
+    console.log(err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // 🔍 Recherche
   const handleSearch = (text) => {
@@ -72,7 +78,7 @@ export default function WilayasScreen() {
 
   // 💾 Sauvegarder
   const handleSave = async () => {
-    if (!name) {
+    if (!name.trim()) {
       Alert.alert("Validation", "Nom obligatoire");
       return;
     }
@@ -81,17 +87,23 @@ export default function WilayasScreen() {
       setLoading(true);
 
       if (editingWilaya) {
-        await updateWilaya(editingWilaya.id, { nom: name });
+        await updateWilaya(editingWilaya.id, { name: name.trim() });
         Alert.alert("Succès", "Wilaya modifiée");
       } else {
-        await createWilaya({ nom: name });
+        await createWilaya({ name: name.trim() });
         Alert.alert("Succès", "Wilaya créée");
       }
 
       setModalVisible(false);
       fetchWilayas();
-    } catch {
-      Alert.alert("Erreur", "Erreur lors de l'enregistrement");
+    } catch (err) {
+      console.log(err.response?.data); // pour debugger Laravel
+      const errors = err.response?.data?.errors;
+      if (errors?.name) {
+        Alert.alert("Erreur", errors.name[0]);
+      } else {
+        Alert.alert("Erreur", "Erreur lors de l'enregistrement");
+      }
     } finally {
       setLoading(false);
     }
@@ -108,8 +120,9 @@ export default function WilayasScreen() {
             setLoading(true);
             await deleteWilaya(id);
             fetchWilayas();
-          } catch {
+          } catch (err) {
             Alert.alert("Erreur", "Erreur suppression");
+            console.log(err);
           } finally {
             setLoading(false);
           }
@@ -126,7 +139,7 @@ export default function WilayasScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Gestion des wilayas</Text>
 
-      {/* Recherche */}
+      {/* 🔍 Recherche */}
       <TextInput
         style={styles.search}
         placeholder="Rechercher..."
@@ -134,18 +147,27 @@ export default function WilayasScreen() {
         onChangeText={handleSearch}
       />
 
-      {/* Ajouter */}
+      {/* ➕ Ajouter */}
       <TouchableOpacity style={styles.addButton} onPress={openAddModal}>
-        <Text style={styles.addButtonText}>+ Ajouter wilaya</Text>
+        <Ionicons name="add-circle-outline" size={20} color="#fff" />
+        <Text style={styles.addButtonText}> Ajouter wilaya</Text>
       </TouchableOpacity>
 
-      {/* Liste */}
+      {/* 📋 Liste */}
       <FlatList
         data={filteredWilayas}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <Text style={styles.name}>{item.nom}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.name}>{item.nom}</Text>
+              <Text style={styles.info}>
+                Gestionnaire: {item.gestionnaire?.nom || "Inconnu"}
+              </Text>
+              <Text style={styles.info}>
+                Solde actuel: {item.caisse?.solde_actuel || "0,00"}
+              </Text>
+            </View>
 
             <View style={styles.actions}>
               <TouchableOpacity onPress={() => openEditModal(item)}>
@@ -160,7 +182,7 @@ export default function WilayasScreen() {
         )}
       />
 
-      {/* Modal */}
+      {/* 📝 Modal */}
       <Modal visible={modalVisible} animationType="slide">
         <ScrollView contentContainerStyle={styles.modalContainer}>
           <Text style={styles.modalTitle}>
@@ -175,14 +197,16 @@ export default function WilayasScreen() {
           />
 
           <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-            <Text style={styles.saveButtonText}>Enregistrer</Text>
+            <Ionicons name="save-outline" size={20} color="#fff" />
+            <Text style={styles.saveButtonText}> Enregistrer</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => setModalVisible(false)}
             style={styles.cancelButton}
           >
-            <Text style={styles.cancelButtonText}>Annuler</Text>
+            <Ionicons name="close-circle-outline" size={20} color="#fff" />
+            <Text style={styles.cancelButtonText}> Annuler</Text>
           </TouchableOpacity>
         </ScrollView>
       </Modal>
@@ -204,10 +228,12 @@ const styles = StyleSheet.create({
   },
 
   addButton: {
+    flexDirection: "row",
     backgroundColor: "#2e86de",
     padding: 12,
     borderRadius: 10,
     alignItems: "center",
+    justifyContent: "center",
     marginBottom: 15,
   },
   addButtonText: { color: "#fff", fontWeight: "bold" },
@@ -228,11 +254,11 @@ const styles = StyleSheet.create({
   },
 
   name: { fontWeight: "bold", fontSize: 16 },
+  info: { fontSize: 12, color: "#555", marginTop: 3 },
 
   actions: { flexDirection: "row", gap: 15 },
 
   modalContainer: { padding: 20 },
-
   modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 15 },
 
   input: {
@@ -245,19 +271,23 @@ const styles = StyleSheet.create({
   },
 
   saveButton: {
+    flexDirection: "row",
     backgroundColor: "green",
     padding: 14,
     borderRadius: 10,
     alignItems: "center",
+    justifyContent: "center",
     marginTop: 10,
   },
   saveButtonText: { color: "#fff", fontWeight: "bold" },
 
   cancelButton: {
+    flexDirection: "row",
     backgroundColor: "#e74c3c",
     padding: 14,
     borderRadius: 10,
     alignItems: "center",
+    justifyContent: "center",
     marginTop: 10,
   },
   cancelButtonText: { color: "#fff", fontWeight: "bold" },

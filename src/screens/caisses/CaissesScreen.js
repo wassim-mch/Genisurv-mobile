@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState, useContext, useMemo } from "react";
 import {
   View,
   Text,
@@ -7,119 +7,135 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  ScrollView,
+  Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useFonts } from "expo-font";
 
-import { getCaisses, getMyCaisse } from "../../services/caisses.api";
+import { getCaisses } from "../../services/caisses.api";
+import { getWilayas } from "../../services/wilayas.api";
 import { AuthContext } from "../../context/AuthContext";
 
 export default function CaissesScreen() {
   const { user } = useContext(AuthContext);
 
   const [caisses, setCaisses] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [wilayas, setWilayas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [blinkAnim] = useState(new Animated.Value(0));
+
+  // Charger les polices
+  const [fontsLoaded] = useFonts({
+    Poppins_400Regular: require("../../../assets/fonts/Poppins-Regular.ttf"),
+    Poppins_600SemiBold: require("../../../assets/fonts/Poppins-SemiBold.ttf"),
+    Poppins_700Bold: require("../../../assets/fonts/Poppins-Bold.ttf"),
+  });
 
   useEffect(() => {
-    fetchCaisses();
+    fetchData();
+    startBlink();
   }, []);
 
-  const fetchCaisses = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
-
-      if (user?.role === "Gestionnaire") {
-        const data = await getMyCaisse();
-        setCaisses([data]);
-      } else {
-        const data = await getCaisses();
-        setCaisses(data);
-      }
-    } catch {
-      Alert.alert("Erreur", "Impossible de charger les caisses");
+      const [caisseData, wilayaData] = await Promise.all([
+        getCaisses(),
+        getWilayas(),
+      ]);
+      setCaisses(Array.isArray(caisseData) ? caisseData : []);
+      setWilayas(Array.isArray(wilayaData) ? wilayaData : []);
+    } catch (error) {
+      Alert.alert("Erreur", "Impossible de charger les données");
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading) {
+  const wilayaMap = useMemo(() => {
+    const map = new Map();
+    wilayas.forEach((w) => map.set(Number(w.id), w.name));
+    return map;
+  }, [wilayas]);
+
+  const renderWilayaName = (item) => {
+    return item.wilaya || wilayaMap.get(Number(item.wilaya_id)) || "-";
+  };
+
+  // Animation clignotante pour "A Alimenter"
+  const startBlink = () => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(blinkAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.timing(blinkAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+      ])
+    ).start();
+  };
+
+  if (loading || !fontsLoaded) {
     return <ActivityIndicator size="large" style={{ marginTop: 50 }} />;
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Gestion des Caisses</Text>
+      <Text style={styles.title}>🏦 Gestion des Caisses</Text>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View>
-          {/* Header Tableau */}
-          <View style={styles.tableHeader}>
-            <Text style={[styles.headerCell, { width: 150 }]}>Nom</Text>
-            <Text style={[styles.headerCell, { width: 120 }]}>Wilaya</Text>
-            <Text style={[styles.headerCell, { width: 120 }]}>Solde</Text>
-            <Text style={[styles.headerCell, { width: 100 }]}>Statut</Text>
-            <Text style={[styles.headerCell, { width: 80 }]}>Action</Text>
-          </View>
+      {/* HEADER TABLEAU */}
+      <View style={styles.tableHeader}>
+        <Text style={styles.headerCell}>
+          <Ionicons name="location-outline" size={16} color="#fff" /> Wilaya
+        </Text>
+        <Text style={styles.headerCell}>
+          <Ionicons name="cash-outline" size={16} color="#fff" /> Solde
+        </Text>
+        <Text style={styles.headerCell}>
+          <Ionicons name="alert-circle-outline" size={16} color="#fff" /> Statut
+        </Text>
+        <Text style={styles.headerCell}>
+          <Ionicons name="eye-outline" size={16} color="#fff" /> Action
+        </Text>
+      </View>
 
-          <FlatList
-            data={caisses}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={({ item }) => (
-              <View style={styles.tableRow}>
-                <Text style={[styles.cell, { width: 150 }]}>
-                  {item.name}
-                </Text>
+      {/* LISTE DES CAISSES */}
+      <FlatList
+        data={caisses}
+        keyExtractor={(item) => item.id.toString()}
+        contentContainerStyle={{ paddingBottom: 50 }}
+        renderItem={({ item, index }) => {
+          const solde = item.solde_actuel ?? 0;
+          const isLow = solde <= 5000;
+          const status = isLow ? "A Alimenter" : "OK";
 
-                <Text style={[styles.cell, { width: 120 }]}>
-                  {item.wilaya?.nom || "-"}
-                </Text>
-
-                <Text style={[styles.cell, { width: 120 }]}>
-                  {item.balance ?? 0} DA
-                </Text>
-
-                <Text
+          return (
+            <View style={[styles.row, index === 0 && { backgroundColor: "#d6eaf8" }]}>
+              <Text style={styles.cell}>{renderWilayaName(item)}</Text>
+              <Text style={[styles.cell, { color: isLow ? "#e74c3c" : "#27ae60" }]}>
+                {solde} DA
+              </Text>
+              {isLow ? (
+                <Animated.Text
                   style={[
                     styles.cell,
-                    {
-                      width: 100,
-                      color:
-                        item.status === "active"
-                          ? "green"
-                          : "red",
-                      fontWeight: "bold",
-                    },
+                    { color: "#e74c3c", fontWeight: "bold", opacity: blinkAnim },
                   ]}
                 >
-                  {item.status}
+                  {status}
+                </Animated.Text>
+              ) : (
+                <Text style={[styles.cell, { color: "#27ae60", fontWeight: "bold" }]}>
+                  {status}
                 </Text>
-
-                <View
-                  style={[
-                    styles.cell,
-                    { width: 80, flexDirection: "row" },
-                  ]}
-                >
-                  <TouchableOpacity
-                    onPress={() =>
-                      Alert.alert(
-                        "Détails",
-                        `Caisse : ${item.name}`
-                      )
-                    }
-                  >
-                    <Ionicons
-                      name="eye-outline"
-                      size={20}
-                      color="#2e86de"
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-          />
-        </View>
-      </ScrollView>
+              )}
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => Alert.alert("Voir Caisse", `Caisse ${item.name}`)}
+              >
+                <Ionicons name="eye-outline" size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          );
+        }}
+      />
     </View>
   );
 }
@@ -127,40 +143,52 @@ export default function CaissesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: "#f4f8fb",
+    padding: 15,
+    backgroundColor: "#f4f6f9",
   },
-
   title: {
     fontSize: 22,
-    fontWeight: "bold",
+    fontWeight: "700",
     marginBottom: 15,
+    color: "#2e86de",
+    textAlign: "center",
+    fontFamily: "Poppins_700Bold",
   },
-
-  /* TABLE */
   tableHeader: {
     flexDirection: "row",
-    backgroundColor: "#2e86de",
+    backgroundColor: "#3498db",
     paddingVertical: 12,
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
+    borderRadius: 8,
   },
-
   headerCell: {
+    flex: 1,
     color: "#fff",
-    fontWeight: "bold",
-    paddingHorizontal: 10,
+    fontWeight: "600",
+    textAlign: "center",
+    fontSize: 13,
+    fontFamily: "Poppins_600SemiBold",
   },
-
-  tableRow: {
+  row: {
     flexDirection: "row",
     backgroundColor: "#fff",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    paddingVertical: 15,
+    marginTop: 6,
+    borderRadius: 8,
+    elevation: 2,
+    alignItems: "center",
   },
-
   cell: {
-    paddingHorizontal: 10,
+    flex: 1,
+    textAlign: "center",
+    fontSize: 13,
+    fontFamily: "Poppins_400Regular",
+  },
+  actionButton: {
+    flex: 1,
+    backgroundColor: "#38ada9",
+    padding: 8,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
