@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Alert,
   Modal,
   StyleSheet,
+  Animated,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
@@ -22,6 +24,47 @@ import {
 import { getRoles } from "../../services/roles.api";
 import { getWilayas } from "../../services/wilayas.api";
 
+// ================= LOADER PERSONNALISÉ =================
+function Loader({ loading }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (loading) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    }
+  }, [loading]);
+
+  if (!loading) return null;
+
+  return (
+    <View style={styles.loader}>
+      <Animated.Image
+        source={require("../../../assets/images/logo.png")}
+        style={[styles.loaderLogo, { opacity: fadeAnim }]}
+      />
+      <ActivityIndicator
+        size="large"
+        color="#2563eb"
+        style={{ marginTop: 20 }}
+      />
+    </View>
+  );
+}
+
+// ================= USERS SCREEN =================
 export default function UsersScreen() {
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
@@ -115,11 +158,11 @@ export default function UsersScreen() {
 
     try {
       const dataToSend = {
-        name: form.nom, // ⚠️ nom → name pour Laravel
+        name: form.nom,
         email: form.email,
         role_id: form.role_id,
         wilaya_id: form.wilaya_id || null,
-        ...(form.password && { password: form.password }), // envoyer password uniquement si ajouté
+        ...(form.password && { password: form.password }),
       };
 
       if (editingUser) {
@@ -154,8 +197,12 @@ export default function UsersScreen() {
     ]);
   };
 
-  if (loading) return <ActivityIndicator size="large" style={{ marginTop: 50 }} />;
+  // ======== RENDER LOADER ========
+  if (loading) {
+    return <Loader loading={loading} />;
+  }
 
+  // ======== RENDER MAIN SCREEN ========
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -202,7 +249,12 @@ export default function UsersScreen() {
               <Text style={styles.td}>{item.id}</Text>
               <Text style={styles.td}>{item.nom}</Text>
               <Text style={styles.td}>{item.email}</Text>
-              <Text style={[styles.td, { color: item.email_verification ? "green" : "red" }]}>
+              <Text
+                style={[
+                  styles.td,
+                  { color: item.email_verification ? "green" : "red" },
+                ]}
+              >
                 {item.email_verification ? "Vérifié" : "Non vérifié"}
               </Text>
               <Text style={styles.td}>********</Text>
@@ -249,7 +301,9 @@ export default function UsersScreen() {
             <Picker
               selectedValue={form.wilaya_id}
               style={styles.picker}
-              onValueChange={(value) => setForm({ ...form, wilaya_id: value })}
+              onValueChange={(value) =>
+                setForm({ ...form, wilaya_id: value })
+              }
             >
               <Picker.Item label="Sélectionner une wilaya" value="" />
               {wilayas.map((w) => (
@@ -260,8 +314,18 @@ export default function UsersScreen() {
 
           {!editingUser && (
             <>
-              {renderInput("lock-closed-outline", "Mot de passe", "password", true)}
-              {renderInput("lock-closed-outline", "Confirmer mot de passe", "confirmPassword", true)}
+              {renderInput(
+                "lock-closed-outline",
+                "Mot de passe",
+                "password",
+                true
+              )}
+              {renderInput(
+                "lock-closed-outline",
+                "Confirmer mot de passe",
+                "confirmPassword",
+                true
+              )}
             </>
           )}
 
@@ -269,7 +333,10 @@ export default function UsersScreen() {
             <Text style={styles.saveText}>Enregistrer</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={() => setModalVisible(false)}
+          >
             <Text style={styles.cancelText}>Annuler</Text>
           </TouchableOpacity>
         </ScrollView>
@@ -295,25 +362,90 @@ export default function UsersScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: "#f4f8fb" },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 15, gap: 10 },
+  loader: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f1f5f9",
+  },
+  loaderLogo: {
+    width: 200,
+    height: 200,
+    resizeMode: "contain",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 15,
+    gap: 10,
+  },
   title: { fontSize: 22, fontFamily: "Poppins-Bold", color: "#2e86de" },
-  searchContainer: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#d6e6f9", padding: 10, borderRadius: 10, marginBottom: 10 },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#d6e6f9",
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
   search: { marginLeft: 10, flex: 1, fontFamily: "Poppins-Regular" },
-  addButton: { flexDirection: "row", backgroundColor: "#2e86de", padding: 12, borderRadius: 10, alignItems: "center", justifyContent: "center", marginBottom: 15 },
+
+  addButton: {
+    flexDirection: "row",
+    backgroundColor: "#2e86de",
+    padding: 12,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 15,
+  },
   addButtonText: { color: "#fff", fontFamily: "Poppins-Bold" },
-  tableContainer: { borderWidth: 1, borderColor: "#d6e6f9", borderRadius: 10, backgroundColor: "#fff" },
+  tableContainer: {
+    borderWidth: 1,
+    borderColor: "#d6e6f9",
+    borderRadius: 10,
+    backgroundColor: "#fff",
+  },
   tableHeader: { flexDirection: "row", backgroundColor: "#d6e6f9", padding: 10 },
   th: { width: 120 },
   thText: { fontFamily: "Poppins-Bold", color: "#2e86de" },
   tableRow: { flexDirection: "row", padding: 10, borderBottomWidth: 1, borderColor: "#eee" },
   td: { width: 120, fontFamily: "Poppins-Regular", color: "#000" },
   actions: { flexDirection: "row", gap: 15 },
-  inputContainer: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#ccc", padding: 10, borderRadius: 10, marginBottom: 10 },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#ccc",
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
   input: { marginLeft: 10, flex: 1, fontFamily: "Poppins-Regular" },
   picker: { flex: 1 },
-  modalTitle: { fontSize: 20, fontFamily: "Poppins-Bold", marginBottom: 15, textAlign: "center", color: "#2e86de" },
-  saveButton: { backgroundColor: "green", padding: 14, borderRadius: 10, alignItems: "center", marginTop: 10 },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: "Poppins-Bold",
+    marginBottom: 15,
+    textAlign: "center",
+    color: "#2e86de",
+  },
+  saveButton: {
+    backgroundColor: "green",
+    padding: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 10,
+  },
   saveText: { color: "#fff", fontFamily: "Poppins-Bold" },
-  cancelButton: { backgroundColor: "red", padding: 14, borderRadius: 10, alignItems: "center", marginTop: 10 },
+  cancelButton: {
+    backgroundColor: "red",
+    padding: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 10,
+  },
   cancelText: { color: "#fff", fontFamily: "Poppins-Bold" },
 });

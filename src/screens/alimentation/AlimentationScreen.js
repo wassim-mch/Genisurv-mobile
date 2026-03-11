@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -15,17 +15,60 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useFonts } from "expo-font";
 
-import { getAlimentations, createAlimentation, updateAlimentation } from "../../services/alimentations.api";
+import {
+  getAlimentations,
+  createAlimentation,
+  updateAlimentation,
+} from "../../services/alimentations.api";
 import { getCaisses } from "../../services/caisses.api";
 
+// ================= LOADER PERSONNALISÉ =================
+function Loader({ loading }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (loading) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    }
+  }, [loading]);
+
+  if (!loading) return null;
+
+  return (
+    <View style={styles.loader}>
+      <Animated.Image
+        source={require("../../../assets/images/logo.png")}
+        style={[styles.loaderLogo, { opacity: fadeAnim }]}
+      />
+      <ActivityIndicator
+        size="large"
+        color="#2563eb"
+        style={{ marginTop: 20 }}
+      />
+    </View>
+  );
+}
+
+// ================= ALIMENTATION SCREEN =================
 export default function AlimentationScreen() {
   const [caisses, setCaisses] = useState([]);
-  const [alimentations, setAlimentations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [form, setForm] = useState({ montant: "", note: "" });
-  const [blinkAnim] = useState(new Animated.Value(0));
 
   // Charger les polices
   const [fontsLoaded] = useFonts({
@@ -36,7 +79,6 @@ export default function AlimentationScreen() {
 
   useEffect(() => {
     fetchData();
-    startBlink();
   }, []);
 
   const fetchData = async () => {
@@ -45,13 +87,13 @@ export default function AlimentationScreen() {
       const caisseData = await getCaisses();
       const alimData = await getAlimentations();
 
-      // Pour chaque caisse, trouver son alimentation la plus récente
+      // Fusionner alimentation la plus récente par caisse
       const merged = caisseData.map((caisse) => {
         const alim = alimData.find((a) => a.caisse?.id === caisse.id) || null;
         return {
           ...caisse,
           alim,
-          wilaya_name: caisse.wilaya || caisse.wilaya_name || "-", // si la caisse contient wilaya
+          wilaya_name: caisse.wilaya || caisse.wilaya_name || "-",
         };
       });
 
@@ -62,15 +104,6 @@ export default function AlimentationScreen() {
       Alert.alert("Erreur", "Impossible de charger les données");
       setLoading(false);
     }
-  };
-
-  const startBlink = () => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(blinkAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-        Animated.timing(blinkAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
-      ])
-    ).start();
   };
 
   const openModal = (caisse) => {
@@ -107,10 +140,10 @@ export default function AlimentationScreen() {
     }
   };
 
-  if (loading || !fontsLoaded) {
-    return <ActivityIndicator size="large" style={{ marginTop: 50 }} />;
-  }
+  // ======== RENDER LOADER ========
+  if (loading) return <Loader loading={loading} />;
 
+  // ======== RENDER MAIN SCREEN ========
   return (
     <View style={styles.container}>
       <Text style={styles.title}>💰 Gestion des Alimentations</Text>
@@ -118,9 +151,8 @@ export default function AlimentationScreen() {
       {/* TABLEAU */}
       <View style={styles.tableHeader}>
         <Text style={[styles.headerCell, { flex: 2 }]}>
-          <Ionicons name="cash-outline" size={16} color="#fff" />Caisse
+          <Ionicons name="cash-outline" size={16} color="#fff" /> Caisse
         </Text>
-        
         <Text style={[styles.headerCell, { flex: 2 }]}>
           <Ionicons name="wallet-outline" size={16} color="#fff" /> Montant
         </Text>
@@ -137,25 +169,31 @@ export default function AlimentationScreen() {
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={{ paddingBottom: 50 }}
         renderItem={({ item }) => {
-           const solde = item.solde_actuel ?? 0;
+          let solde = item.solde_actuel ?? 0;
           if (item.alim?.montant != null) {
-            if (typeof item.alim.montant === "string") {
-              solde = parseFloat(item.alim.montant.replace(/\s/g, "").replace(",", "."));
-            } else {
-              solde = Number(item.alim.montant);
-            }
+            solde =
+              typeof item.alim.montant === "string"
+                ? parseFloat(item.alim.montant.replace(/\s/g, "").replace(",", "."))
+                : Number(item.alim.montant);
           }
           const isLow = solde <= 5000 && solde > 0;
-          const status = isLow ? "A Alimenter" : "OK";
 
           return (
             <View style={styles.row}>
               <Text style={[styles.cell, { flex: 2 }]}>{item.wilaya_name}</Text>
-              <Text style={[styles.cell, { flex: 2, color: isLow ? "#e74c3c" : "#27ae60", fontWeight: "bold" }]}>
+              <Text
+                style={[
+                  styles.cell,
+                  { flex: 2, color: isLow ? "#e74c3c" : "#27ae60", fontWeight: "bold" },
+                ]}
+              >
                 {solde} DA
               </Text>
               <Text style={[styles.cell, { flex: 2 }]}>{item.alim?.par || "Système"}</Text>
-              <TouchableOpacity style={[styles.actionButton, { flex: 1 }]} onPress={() => openModal(item)}>
+              <TouchableOpacity
+                style={[styles.actionButton, { flex: 1 }]}
+                onPress={() => openModal(item)}
+              >
                 <Ionicons name="add-circle-outline" size={24} color="#fff" />
               </TouchableOpacity>
             </View>
@@ -196,6 +234,9 @@ export default function AlimentationScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 15, backgroundColor: "#f4f6f9" },
   title: { fontSize: 22, fontWeight: "700", color: "#2e86de", textAlign: "center", marginBottom: 15, fontFamily: "Poppins_700Bold" },
+
+  loader: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f1f5f9" },
+  loaderLogo: { width: 200, height: 200, resizeMode: "contain" },
 
   tableHeader: { flexDirection: "row", backgroundColor: "#3498db", paddingVertical: 12, borderRadius: 8 },
   headerCell: { color: "#fff", fontWeight: "600", textAlign: "center", fontSize: 13, fontFamily: "Poppins_600SemiBold" },

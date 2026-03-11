@@ -1,7 +1,12 @@
 import api from "./api"; // ton axios mobile (api.js)
 
-export const getDecaissements = async () => {
-  const res = await api.get("/decaissement");
+
+export const getDecaissements = async (isAdmin) => {
+  const url = isAdmin
+    ? "/admin/decaissement"
+    : "/decaissement";
+
+  const res = await api.get(url);
   return res.data.decaissements;
 };
 

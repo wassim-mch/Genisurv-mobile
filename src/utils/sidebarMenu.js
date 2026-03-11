@@ -1,7 +1,7 @@
 export const sidebarMenu = [
   { 
     label: "Dashboard", 
-    permission: "voir_caisse", 
+    permission: null,
     screen: "Dashboard",
     icon: "speedometer-outline"
   },

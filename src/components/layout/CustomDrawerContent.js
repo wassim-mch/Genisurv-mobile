@@ -16,7 +16,8 @@ import { usePermissions } from "../../hooks/usePermissions";
 
 export default function CustomDrawerContent(props) {
   const permissions = usePermissions() || [];
-  const { logout } = useContext(AuthContext);
+  const { logout, user } = useContext(AuthContext);
+  const role = user?.role || "";
 
   const activeRoute = props.state.routeNames[props.state.index];
 
@@ -33,13 +34,35 @@ export default function CustomDrawerContent(props) {
     ]);
   };
 
+  // ---------------- Map Menu ----------------
+  const menuItems = sidebarMenu.map((item) => {
+    const hasPermission =
+      !item.permission || // Dashboard toujours visible
+      (Array.isArray(item.permission)
+        ? item.permission.some((p) => permissions.includes(p))
+        : permissions.includes(item.permission));
+
+    if (!hasPermission) return null;
+
+    const isActive = activeRoute === item.screen;
+
+    return (
+      <AnimatedMenuItem
+        key={item.screen}
+        item={item}
+        isActive={isActive}
+        onPress={() => props.navigation.navigate(item.screen)}
+      />
+    );
+  });
+
   return (
     <DrawerContentScrollView
       {...props}
       contentContainerStyle={styles.container}
     >
-      {/* TOP SECTION */}
       <View>
+        {/* HEADER */}
         <View style={styles.header}>
           <Image
             source={require("../../../assets/images/logo.png")}
@@ -48,43 +71,21 @@ export default function CustomDrawerContent(props) {
           />
         </View>
 
+        {/* MENU */}
         <View style={styles.menu}>
-          {sidebarMenu.map((item) => {
-            const hasPermission = Array.isArray(item.permission)
-              ? item.permission.some((p) => permissions.includes(p))
-              : permissions.includes(item.permission);
-
-            if (!hasPermission) return null;
-
-            const isActive = activeRoute === item.screen;
-
-            return (
-              <AnimatedMenuItem
-                key={item.screen}
-                item={item}
-                isActive={isActive}
-                onPress={() => props.navigation.navigate(item.screen)}
-              />
-            );
-          })}
+          {menuItems}
         </View>
       </View>
 
       {/* FOOTER */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color="white" />
-          <Text style={styles.logoutText}> Déconnexion</Text>
-        </TouchableOpacity>
+       
       </View>
     </DrawerContentScrollView>
   );
 }
 
-/* ========================= */
 /* Animated Menu Item */
-/* ========================= */
-
 function AnimatedMenuItem({ item, isActive, onPress }) {
   const animatedValue = useRef(new Animated.Value(isActive ? 1 : 0)).current;
 
@@ -132,57 +133,52 @@ function AnimatedMenuItem({ item, isActive, onPress }) {
   );
 }
 
-/* ========================= */
 /* STYLES */
-/* ========================= */
-
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    justifyContent: "space-between", // garde footer en bas
+    justifyContent: "space-between",
     backgroundColor: "#f3f4f6",
   },
-
   header: {
     alignItems: "center",
     paddingVertical: 25,
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
   },
-
   logo: {
     width: 200,
     height: 80,
   },
-
+  roleText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginTop: 8,
+    color: "#1f2937",
+  },
   menu: {
     paddingTop: 10,
   },
-
   item: {
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
   },
-
   row: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 15,
     paddingHorizontal: 20,
   },
-
   itemText: {
     fontSize: 18,
     color: "#374151",
     fontWeight: "500",
   },
-
   footer: {
     padding: 20,
     borderTopWidth: 1,
     borderTopColor: "#e5e7eb",
   },
-
   logoutButton: {
     flexDirection: "row",
     backgroundColor: "#dc2626",
@@ -191,7 +187,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
   logoutText: {
     color: "white",
     fontSize: 16,

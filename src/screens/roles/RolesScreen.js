@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -8,8 +8,10 @@ import {
   TextInput,
   Alert,
   Modal,
-  StyleSheet,
   ScrollView,
+  StyleSheet,
+  Animated,
+  Easing
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { usePermissions } from "../../hooks/usePermissions";
@@ -19,12 +21,33 @@ import { getRoles, createRole, updateRole, deleteRole } from "../../services/rol
 export default function RolesScreen() {
   const [roles, setRoles] = useState([]);
   const [selectedPermissions, setSelectedPermissions] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingRole, setEditingRole] = useState(null);
   const [name, setName] = useState("");
 
   const permissionsList = usePermissions();
+
+  // 🔥 Animation logo clignotant
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 500,
+          easing: Easing.linear,
+          useNativeDriver: true
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 500,
+          easing: Easing.linear,
+          useNativeDriver: true
+        })
+      ])
+    ).start();
+  }, []);
 
   useEffect(() => {
     fetchRoles();
@@ -37,6 +60,7 @@ export default function RolesScreen() {
       setRoles(data);
     } catch (err) {
       Alert.alert("Erreur", "Impossible de charger les rôles");
+      console.log(err);
     } finally {
       setLoading(false);
     }
@@ -67,7 +91,6 @@ export default function RolesScreen() {
       Alert.alert("Validation", "Nom du rôle obligatoire");
       return;
     }
-
     try {
       setLoading(true);
       if (editingRole) {
@@ -81,6 +104,7 @@ export default function RolesScreen() {
       fetchRoles();
     } catch (err) {
       Alert.alert("Erreur", "Erreur lors de l'enregistrement");
+      console.log(err);
     } finally {
       setLoading(false);
     }
@@ -106,8 +130,21 @@ export default function RolesScreen() {
     ]);
   };
 
+  // ================= LOADER PERSONNALISÉ =================
   if (loading) {
-    return <ActivityIndicator size="large" style={{ marginTop: 50 }} />;
+    return (
+      <View style={styles.loader}>
+        <Animated.Image
+          source={require("../../../assets/images/logo.png")}
+          style={[styles.loaderLogo, { opacity: fadeAnim }]}
+        />
+        <ActivityIndicator
+          size="large"
+          color="#2563eb"
+          style={{ marginTop: 20 }}
+        />
+      </View>
+    );
   }
 
   return (
@@ -264,4 +301,16 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   cancelButtonText: { color: "#fff", fontWeight: "bold" },
+
+  loader: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f0f4f8",
+  },
+  loaderLogo: {
+    width: 200,
+    height: 200,
+    resizeMode: "contain"
+  },
 });

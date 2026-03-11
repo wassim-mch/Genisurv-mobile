@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
+  Animated,
+  Easing
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -23,37 +25,53 @@ import {
 export default function WilayasScreen() {
   const [wilayas, setWilayas] = useState([]);
   const [filteredWilayas, setFilteredWilayas] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editingWilaya, setEditingWilaya] = useState(null);
   const [name, setName] = useState("");
 
+  // 🔥 Animation logo clignotant
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 500,
+          easing: Easing.linear,
+          useNativeDriver: true
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 500,
+          easing: Easing.linear,
+          useNativeDriver: true
+        })
+      ])
+    ).start();
+  }, []);
+
   useEffect(() => {
     fetchWilayas();
   }, []);
 
-  // 🔄 Charger les wilayas
   const fetchWilayas = async () => {
-  try {
-    setLoading(true);
-    const data = await getWilayas();
-    console.log("Data API:", data); // <== ça va te montrer ce qui arrive
+    try {
+      setLoading(true);
+      const data = await getWilayas();
+      const wilayaList = data.wilayas || data;
+      setWilayas(wilayaList);
+      setFilteredWilayas(wilayaList);
+    } catch (err) {
+      Alert.alert("Erreur", "Impossible de charger les wilayas");
+      console.log(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    // Vérifie si c'est data.wilayas ou data directement
-    const wilayaList = data.wilayas || data;
-    setWilayas(wilayaList);
-    setFilteredWilayas(wilayaList);
-  } catch (err) {
-    Alert.alert("Erreur", "Impossible de charger les wilayas");
-    console.log(err);
-  } finally {
-    setLoading(false);
-  }
-};
-
-  // 🔍 Recherche
   const handleSearch = (text) => {
     setSearch(text);
     const filtered = wilayas.filter((w) =>
@@ -62,30 +80,25 @@ export default function WilayasScreen() {
     setFilteredWilayas(filtered);
   };
 
-  // ➕ Ajouter
   const openAddModal = () => {
     setEditingWilaya(null);
     setName("");
     setModalVisible(true);
   };
 
-  // ✏️ Modifier
   const openEditModal = (wilaya) => {
     setEditingWilaya(wilaya);
     setName(wilaya.nom);
     setModalVisible(true);
   };
 
-  // 💾 Sauvegarder
   const handleSave = async () => {
     if (!name.trim()) {
       Alert.alert("Validation", "Nom obligatoire");
       return;
     }
-
     try {
       setLoading(true);
-
       if (editingWilaya) {
         await updateWilaya(editingWilaya.id, { name: name.trim() });
         Alert.alert("Succès", "Wilaya modifiée");
@@ -93,11 +106,10 @@ export default function WilayasScreen() {
         await createWilaya({ name: name.trim() });
         Alert.alert("Succès", "Wilaya créée");
       }
-
       setModalVisible(false);
       fetchWilayas();
     } catch (err) {
-      console.log(err.response?.data); // pour debugger Laravel
+      console.log(err.response?.data);
       const errors = err.response?.data?.errors;
       if (errors?.name) {
         Alert.alert("Erreur", errors.name[0]);
@@ -109,7 +121,6 @@ export default function WilayasScreen() {
     }
   };
 
-  // ❌ Supprimer
   const handleDelete = (id) => {
     Alert.alert("Confirmation", "Supprimer cette wilaya ?", [
       { text: "Annuler" },
@@ -131,15 +142,27 @@ export default function WilayasScreen() {
     ]);
   };
 
+  // ================= LOADER PERSONNALISÉ =================
   if (loading) {
-    return <ActivityIndicator size="large" style={{ marginTop: 50 }} />;
+    return (
+      <View style={styles.loader}>
+        <Animated.Image
+          source={require("../../../assets/images/logo.png")}
+          style={[styles.loaderLogo, { opacity: fadeAnim }]}
+        />
+        <ActivityIndicator
+          size="large"
+          color="#2563eb"
+          style={{ marginTop: 20 }}
+        />
+      </View>
+    );
   }
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Gestion des wilayas</Text>
 
-      {/* 🔍 Recherche */}
       <TextInput
         style={styles.search}
         placeholder="Rechercher..."
@@ -147,13 +170,11 @@ export default function WilayasScreen() {
         onChangeText={handleSearch}
       />
 
-      {/* ➕ Ajouter */}
       <TouchableOpacity style={styles.addButton} onPress={openAddModal}>
         <Ionicons name="add-circle-outline" size={20} color="#fff" />
         <Text style={styles.addButtonText}> Ajouter wilaya</Text>
       </TouchableOpacity>
 
-      {/* 📋 Liste */}
       <FlatList
         data={filteredWilayas}
         keyExtractor={(item) => item.id.toString()}
@@ -182,7 +203,6 @@ export default function WilayasScreen() {
         )}
       />
 
-      {/* 📝 Modal */}
       <Modal visible={modalVisible} animationType="slide">
         <ScrollView contentContainerStyle={styles.modalContainer}>
           <Text style={styles.modalTitle}>
@@ -291,4 +311,16 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   cancelButtonText: { color: "#fff", fontWeight: "bold" },
+
+  loader: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f4f8fb",
+  },
+  loaderLogo: {
+    width: 200,
+    height: 200,
+    resizeMode: "contain"
+  },
 });
