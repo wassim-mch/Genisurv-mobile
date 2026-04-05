@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useContext } from "react";
 import {
   View,
   Text,
@@ -16,14 +16,14 @@ import {
 } from "react-native";
 
 import * as Font from "expo-font";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { login } from "../../services/authService";
+import { AuthContext } from "../../context/AuthContext"; // ✅ FIX
 
 export default function LoginScreen({ navigation }) {
+  const { login } = useContext(AuthContext); // ✅ FIX
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fontsLoaded, setFontsLoaded] = useState(false);
-  const [checkingToken, setCheckingToken] = useState(true);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.7)).current;
@@ -41,15 +41,6 @@ export default function LoginScreen({ navigation }) {
     const initialize = async () => {
       await loadFonts();
       setFontsLoaded(true);
-
-      // 🔐 Vérifier si token existe
-      const token = await AsyncStorage.getItem("token");
-
-      if (token) {
-        navigation.replace("Home");
-      } else {
-        setCheckingToken(false);
-      }
     };
 
     initialize();
@@ -75,15 +66,15 @@ export default function LoginScreen({ navigation }) {
     }
 
     try {
-      await login(email, password);
-      navigation.replace("Home");
+      await login(email, password); // ✅ utilise context
+      // ❌ PAS de navigation → automatique
     } catch (error) {
       Alert.alert("Erreur", "Email ou mot de passe incorrect");
     }
   };
 
-  // Loader pendant vérification token ou chargement fonts
-  if (!fontsLoaded || checkingToken) {
+  // Loader uniquement pour les fonts
+  if (!fontsLoaded) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#0a4c8a" />
@@ -138,13 +129,15 @@ export default function LoginScreen({ navigation }) {
           <Text style={styles.buttonText}>Se connecter</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={{ alignSelf: "flex-center", marginBottom: 20 }}
-        onPress={() => navigation.navigate("ForgotPassword")}>
-            <Text style={styles.forgotPassword}>
-              Mot de passe oublié ?
-            </Text>
+        <TouchableOpacity
+          style={{ alignSelf: "center", marginBottom: 20 }} // ✅ FIX
+          onPress={() => navigation.navigate("ForgotPassword")}
+        >
+          <Text style={styles.forgotPassword}>
+            Mot de passe oublié ?
+          </Text>
         </TouchableOpacity>
-      
+
         <Text style={styles.description}>
           Cette application est spécialement dédiée aux gestionnaires régionaux et administrateurs de Genisurv
         </Text>
@@ -217,8 +210,8 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-SemiBold",
   },
   forgotPassword: {
-  color: "red",
-  fontFamily: "Poppins-SemiBold",
-  fontSize: 14,
-},
+    color: "red",
+    fontFamily: "Poppins-SemiBold",
+    fontSize: 14,
+  },
 });

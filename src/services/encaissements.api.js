@@ -1,7 +1,8 @@
-import api from "./api"; // ton axios mobile (api.js)
+import api from "./api";
 
-export const getEncaissements = async () => {
-  const res = await api.get("/encaissement");
+// ✅ GET AVEC caisseId
+export const getEncaissements = async (caisseId) => {
+  const res = await api.get(`/encaissement/${caisseId}`);
   return res.data.encaissements;
 };
 

@@ -8,46 +8,69 @@ import {
   StyleSheet,
   Alert,
   Animated,
-  Easing,
   TextInput,
+  Modal,
 } from "react-native";
+import * as Linking from "expo-linking";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  getEncaissements,
+  getDecaissements,
+  updateEtatJustificatif,
+} from "../../services/operations.api";
 
-import { getWilayas } from "../../services/wilayas.api";
-import { getEncaissements, getDecaissements } from "../../services/operations.api";
-
-export default function OperationsScreen() {
+export default function OperationsScreen({ navigation }) {
   const [type, setType] = useState("encaissement");
   const [operations, setOperations] = useState([]);
   const [filteredOps, setFilteredOps] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  const [wilayas, setWilayas] = useState([]);
-  const [selectedWilaya, setSelectedWilaya] = useState(null);
   const [dateFilter, setDateFilter] = useState("");
+
+  // ✅ MODAL ETAT
+  const [etatModal, setEtatModal] = useState(false);
+  const [selectedId, setSelectedId] = useState(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // ================= ANIMATION LOGO =================
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 600, easing: Easing.linear, useNativeDriver: true }),
-        Animated.timing(fadeAnim, { toValue: 0, duration: 600, easing: Easing.linear, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
+  const openJustificatif = (url) => {
+  if (!url) return Alert.alert("Aucun justificatif");
 
-  // ================= FETCH DATA =================
+  navigation.navigate("Preview", {
+    url,
+    type: url?.includes(".pdf") ? "pdf" : "image",
+  });
+};
+
+
+  const updateEtat = async (etat) => {
+    try {
+      await updateEtatJustificatif(selectedId, etat);
+
+      Alert.alert("Succès", "État mis à jour");
+
+      setEtatModal(false);
+      setSelectedId(null);
+
+      fetchOperations();
+    } catch (e) {
+      console.log("ERROR:", e?.response?.data || e.message);
+      Alert.alert("Erreur", "Update impossible");
+    }
+  };
+
+  // ================= FETCH =================
   useEffect(() => {
     fetchOperations();
-    fetchWilayas();
   }, [type]);
 
   const fetchOperations = async () => {
     try {
       setLoading(true);
-      let data = type === "encaissement" ? await getEncaissements() : await getDecaissements();
+      const data =
+        type === "encaissement"
+          ? await getEncaissements()
+          : await getDecaissements();
+
       setOperations(data);
       setFilteredOps(data);
     } catch (err) {
@@ -58,42 +81,16 @@ export default function OperationsScreen() {
     }
   };
 
-  const fetchWilayas = async () => {
-    try {
-      const data = await getWilayas();
-      setWilayas(Array.isArray(data) ? data : data.data);
-    } catch (err) {
-      console.log(err);
-    }
-  };
-
-  // ================= TROUVER NOM WILAYA =================
-  const getWilayaName = (wilayaId) => {
-    if (!wilayaId) return "-";
-    const wilaya = wilayas.find((w) => Number(w.id) === Number(wilayaId));
-    return wilaya ? wilaya.nom || wilaya.name : "-";
-  };
-
-  // ================= FILTRAGE =================
+  // ================= FILTER =================
   useEffect(() => {
     let ops = [...operations];
-
-    if (selectedWilaya) {
-      ops = ops.filter((op) => op.caisse?.wilaya_id === selectedWilaya);
-    }
-
     if (dateFilter) {
-      ops = ops.filter((op) => op.created_at?.startsWith(dateFilter));
+      ops = ops.filter((op) =>
+        op.date_creation?.startsWith(dateFilter)
+      );
     }
-
     setFilteredOps(ops);
-  }, [selectedWilaya, dateFilter, operations]);
-
-  // ================= FORMAT DATE =================
-  const formatDate = (date) => {
-    if (!date) return "-";
-    return new Date(date).toLocaleDateString("fr-FR");
-  };
+  }, [dateFilter, operations]);
 
   // ================= LOADER =================
   if (loading) {
@@ -115,7 +112,10 @@ export default function OperationsScreen() {
       {/* ================= TOGGLE ================= */}
       <View style={styles.toggleContainer}>
         <TouchableOpacity
-          style={[styles.toggleBtn, type === "encaissement" && styles.activeEncaissement]}
+          style={[
+            styles.toggleBtn,
+            type === "encaissement" && styles.activeEncaissement,
+          ]}
           onPress={() => setType("encaissement")}
         >
           <Ionicons name="arrow-up-circle" size={18} color="#fff" />
@@ -123,7 +123,10 @@ export default function OperationsScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.toggleBtn, type === "decaissement" && styles.activeDecaissement]}
+          style={[
+            styles.toggleBtn,
+            type === "decaissement" && styles.activeDecaissement,
+          ]}
           onPress={() => setType("decaissement")}
         >
           <Ionicons name="arrow-down-circle" size={18} color="#fff" />
@@ -131,7 +134,7 @@ export default function OperationsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ================= FILTRES ================= */}
+      {/* ================= FILTER ================= */}
       <View style={styles.filterContainer}>
         <TextInput
           placeholder="Filtrer par date (YYYY-MM-DD)"
@@ -139,67 +142,154 @@ export default function OperationsScreen() {
           value={dateFilter}
           onChangeText={setDateFilter}
         />
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
-          {wilayas.map((w) => (
-            <TouchableOpacity
-              key={w.id}
-              style={[
-                styles.caisseBtn,
-                selectedWilaya === w.id && styles.selectedCaisseBtn,
-              ]}
-              onPress={() => setSelectedWilaya(selectedWilaya === w.id ? null : w.id)}
-            >
-              <Text style={selectedWilaya === w.id ? styles.selectedCaisseText : styles.caisseText}>
-                {w.nom || w.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
       </View>
 
       {/* ================= TABLE ================= */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 15 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={styles.tableContainer}>
           {/* HEADER */}
           <View style={styles.tableHeader}>
-            
             <View style={styles.th}>
-              <Ionicons name="location-outline" size={16} color="#2563eb" />
-              <Text style={styles.thText}> Wilaya</Text>
+              <Text style={styles.thText}>Wilaya</Text>
             </View>
             <View style={styles.th}>
-              <Ionicons name="cash-outline" size={16} color="#2563eb" />
-              <Text style={styles.thText}> Montant</Text>
+              <Text style={styles.thText}>Montant</Text>
             </View>
+
+            {type === "encaissement" ? (
+              <View style={styles.th}>
+                <Text style={styles.thText}>Par</Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.th}>
+                  <Text style={styles.thText}>Désignation</Text>
+                </View>
+                <View style={styles.th}>
+                  <Text style={styles.thText}>Obs</Text>
+                </View>
+                <View style={styles.th}>
+                  <Text style={styles.thText}>Justif</Text>
+                </View>
+                <View style={styles.th}>
+                  <Text style={styles.thText}>État</Text>
+                </View>
+                
+              </>
+            )}
+
             <View style={styles.th}>
-              <Ionicons name="document-text-outline" size={16} color="#2563eb" />
-              <Text style={styles.thText}> Rapport</Text>
-            </View>
-            <View style={styles.th}>
-              <Ionicons name="calendar-outline" size={16} color="#2563eb" />
-              <Text style={styles.thText}> Date</Text>
+              <Text style={styles.thText}>Date</Text>
             </View>
           </View>
 
+          {/* ROWS */}
           {filteredOps.map((item) => (
             <View key={item.id} style={styles.tableRow}>
-              <Text style={styles.td}>{getWilayaName(item.caisse?.wilaya_id)}</Text>
+              <Text style={styles.td}>{item.wilaya || "-"}</Text>
               <Text style={styles.td}>{item.montant} DA</Text>
-              
-              <Text style={styles.td}>{item.rapport || "-"}</Text>
-              <Text style={styles.td}>{formatDate(item.created_at)}</Text>
+
+              {type === "encaissement" ? (
+                <Text style={styles.td}>{item.par || "-"}</Text>
+              ) : (
+                <>
+                  <Text style={styles.td}>{item.designation || "-"}</Text>
+                  <Text style={styles.td}>{item.observation || "-"}</Text>
+
+                  <TouchableOpacity
+                  style={styles.td}
+                  onPress={() => openJustificatif(item.lien_justificatif)}
+                >
+                  <Text style={{ color: "#2563eb" }}>Voir</Text>
+                </TouchableOpacity>
+
+                  <Text
+                    style={[
+                      styles.td,
+                      {
+                        color:
+                          item.etat_justificatif === "justifie"
+                            ? "green"
+                            : item.etat_justificatif === "refuse"
+                            ? "red"
+                            : "orange",
+                      },
+                    ]}
+                  >
+                    {item.etat_justificatif || "-"}
+                  </Text>
+
+                  
+                </>
+              )}
+
+              <Text style={styles.td}>{item.date_creation}</Text>
             </View>
           ))}
         </View>
       </ScrollView>
+
+      {/* ================= MODAL DROPDOWN ================= */}
+      <Modal visible={etatModal} transparent animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "#00000055",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#fff",
+              padding: 20,
+              borderRadius: 10,
+              width: 250,
+            }}
+          >
+            <Text style={{ fontWeight: "bold", marginBottom: 10 }}>
+              Changer état
+            </Text>
+
+            <TouchableOpacity onPress={() => updateEtat("justifie")}>
+              <Text style={{ padding: 10, color: "green" }}>Justifié</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => updateEtat("refuse")}>
+              <Text style={{ padding: 10, color: "red" }}>Refusé</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => updateEtat("attente")}>
+              <Text style={{ padding: 10, color: "orange" }}>Attente</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => setEtatModal(false)}>
+              <Text
+                style={{
+                  marginTop: 10,
+                  textAlign: "center",
+                  color: "#2563eb",
+                }}
+              >
+                Fermer
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: "#f1f5f9" },
-  title: { fontSize: 22, fontWeight: "bold", marginBottom: 15, textAlign: "center", color: "#3b82f6" },
+  title: {
+    fontSize: 22,
+    fontWeight: "bold",
+    marginBottom: 15,
+    textAlign: "center",
+    color: "#3b82f6",
+  },
   toggleContainer: { flexDirection: "row", marginBottom: 15 },
   toggleBtn: {
     flex: 1,
@@ -215,17 +305,33 @@ const styles = StyleSheet.create({
   activeDecaissement: { backgroundColor: "#e74c3c" },
   toggleText: { fontWeight: "bold", color: "#fff" },
   filterContainer: { marginBottom: 10 },
-  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 8 },
-  caisseBtn: { padding: 8, marginRight: 10, backgroundColor: "#e0f2fe", borderRadius: 8 },
-  selectedCaisseBtn: { backgroundColor: "#0369a1" },
-  caisseText: { color: "#0369a1", fontWeight: "600" },
-  selectedCaisseText: { color: "#fff", fontWeight: "600" },
-  tableContainer: { backgroundColor: "#fff", borderRadius: 12, padding: 10, elevation: 3 },
-  tableHeader: { flexDirection: "row", backgroundColor: "#eaf1ff", borderRadius: 8, paddingVertical: 10 },
-  th: { flexDirection: "row", alignItems: "center", minWidth: 120, paddingHorizontal: 10 },
-  thText: { fontWeight: "bold", color: "#2563eb", fontSize: 13 },
-  tableRow: { flexDirection: "row", borderBottomWidth: 1, borderColor: "#f1f5f9", paddingVertical: 12 },
-  td: { minWidth: 120, paddingHorizontal: 10, fontSize: 13, color: "#333" },
-  loader: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f1f5f9" },
-  loaderLogo: { width: 180, height: 180, resizeMode: "contain" },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
+    padding: 8,
+  },
+  tableContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 10,
+    elevation: 3,
+  },
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#eaf1ff",
+    borderRadius: 8,
+    paddingVertical: 10,
+  },
+  th: { minWidth: 120, paddingHorizontal: 10 },
+  thText: { fontWeight: "bold", color: "#2563eb" },
+  tableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderColor: "#f1f5f9",
+    paddingVertical: 12,
+  },
+  td: { minWidth: 120, paddingHorizontal: 10, fontSize: 13 },
+  loader: { flex: 1, justifyContent: "center", alignItems: "center" },
+  loaderLogo: { width: 180, height: 180 },
 });

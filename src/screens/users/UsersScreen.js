@@ -233,7 +233,6 @@ export default function UsersScreen() {
               "Nom",
               "Email",
               "Status",
-              "Mot de passe",
               "Role",
               "Wilaya",
               "Action",
@@ -257,7 +256,7 @@ export default function UsersScreen() {
               >
                 {item.email_verification ? "Vérifié" : "Non vérifié"}
               </Text>
-              <Text style={styles.td}>********</Text>
+              
               <Text style={styles.td}>{item.role}</Text>
               <Text style={styles.td}>{item.wilaya || "-"}</Text>
               <View style={styles.actions}>
@@ -291,7 +290,7 @@ export default function UsersScreen() {
             >
               <Picker.Item label="Sélectionner un role" value="" />
               {roles.map((r) => (
-                <Picker.Item key={r.id} label={r.nom} value={r.id} />
+                <Picker.Item key={r.id} label={r.name} value={r.id} />
               ))}
             </Picker>
           </View>

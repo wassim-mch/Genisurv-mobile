@@ -1,10 +1,10 @@
-import api from "./api"; // ton axios mobile (api.js)
+import api from "./api";
 
-
-export const getDecaissements = async (isAdmin) => {
+// ✅ GET AVEC caisseId
+export const getDecaissements = async (caisseId, isAdmin = false) => {
   const url = isAdmin
     ? "/admin/decaissement"
-    : "/decaissement";
+    : `/decaissement/${caisseId}`;
 
   const res = await api.get(url);
   return res.data.decaissements;

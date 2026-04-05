@@ -189,7 +189,7 @@ export default function AlimentationScreen() {
               >
                 {solde} DA
               </Text>
-              <Text style={[styles.cell, { flex: 2 }]}>{item.alim?.par || "Système"}</Text>
+              <Text style={[styles.cell, { flex: 2 }]}>{item.alim?.user?.roles || "superadmin"}</Text>
               <TouchableOpacity
                 style={[styles.actionButton, { flex: 1 }]}
                 onPress={() => openModal(item)}

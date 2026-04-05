@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Alert,
   Animated,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFonts } from "expo-font";
@@ -16,7 +17,7 @@ import { getCaisses } from "../../services/caisses.api";
 import { getWilayas } from "../../services/wilayas.api";
 import { AuthContext } from "../../context/AuthContext";
 
-// ================= LOADER PERSONNALISÉ =================
+// Loader personnalisé
 function Loader({ loading }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -24,16 +25,8 @@ function Loader({ loading }) {
     if (loading) {
       Animated.loop(
         Animated.sequence([
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 800,
-            useNativeDriver: true,
-          }),
+          Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+          Animated.timing(fadeAnim, { toValue: 0, duration: 800, useNativeDriver: true }),
         ])
       ).start();
     }
@@ -47,16 +40,12 @@ function Loader({ loading }) {
         source={require("../../../assets/images/logo.png")}
         style={[styles.loaderLogo, { opacity: fadeAnim }]}
       />
-      <ActivityIndicator
-        size="large"
-        color="#2563eb"
-        style={{ marginTop: 20 }}
-      />
+      <ActivityIndicator size="large" color="#2563eb" style={{ marginTop: 20 }} />
     </View>
   );
 }
 
-// ================= CAISSES SCREEN =================
+// Écran principal des caisses
 export default function CaissesScreen() {
   const { user } = useContext(AuthContext);
 
@@ -65,7 +54,10 @@ export default function CaissesScreen() {
   const [loading, setLoading] = useState(true);
   const [blinkAnim] = useState(new Animated.Value(0));
 
-  // Charger les polices
+  // Modal détails
+  const [selectedCaisse, setSelectedCaisse] = useState(null);
+  const [modalVisible, setModalVisible] = useState(false);
+
   const [fontsLoaded] = useFonts({
     Poppins_400Regular: require("../../../assets/fonts/Poppins-Regular.ttf"),
     Poppins_600SemiBold: require("../../../assets/fonts/Poppins-SemiBold.ttf"),
@@ -107,15 +99,13 @@ export default function CaissesScreen() {
     ).start();
   };
 
-  // ======== RENDER LOADER ========
   if (loading || !fontsLoaded) return <Loader loading={loading} />;
 
-  // ======== RENDER MAIN SCREEN ========
   return (
     <View style={styles.container}>
       <Text style={styles.title}>🏦 Gestion des Caisses</Text>
 
-      {/* HEADER TABLEAU */}
+      {/* Header */}
       <View style={styles.tableHeader}>
         <Text style={styles.headerCell}>
           <Ionicons name="location-outline" size={16} color="#fff" /> Wilaya
@@ -131,7 +121,7 @@ export default function CaissesScreen() {
         </Text>
       </View>
 
-      {/* LISTE DES CAISSES */}
+      {/* Liste */}
       <FlatList
         data={caisses}
         keyExtractor={(item) => item.id.toString()}
@@ -154,7 +144,10 @@ export default function CaissesScreen() {
               )}
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={() => Alert.alert("Voir Caisse", `Caisse ${item.name}`)}
+                onPress={() => {
+                  setSelectedCaisse(item);
+                  setModalVisible(true);
+                }}
               >
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <Ionicons name="eye-outline" size={18} color="#fff" />
@@ -165,6 +158,38 @@ export default function CaissesScreen() {
           );
         }}
       />
+
+      {/* Modal détails */}
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={{ flex:1, justifyContent:'center', alignItems:'center', backgroundColor:'rgba(0,0,0,0.5)' }}>
+          <View style={{ width:'90%', backgroundColor:'#fff', borderRadius:10, padding:20 }}>
+            <Text style={{ fontSize:18, fontWeight:'bold', marginBottom:10 }}>Détails de la Caisse</Text>
+            {selectedCaisse && (
+              <>
+                <Text>Wilaya: {renderWilayaName(selectedCaisse)}</Text>
+                <Text>Nom: {selectedCaisse.name}</Text>
+                <Text>Solde actuel: {selectedCaisse.solde_actuel} DA</Text>
+                <Text>Total encaissement: {selectedCaisse.total_encaissements} DA</Text>
+                <Text>Total décaissement: {selectedCaisse.total_decaissements} DA</Text>
+                <Text>Total Alimentation: {selectedCaisse.total_alimentations} DA</Text>
+                
+              
+              </>
+            )}
+            <TouchableOpacity
+              onPress={() => setModalVisible(false)}
+              style={{ marginTop:20, backgroundColor:'#2563eb', padding:10, borderRadius:8, alignItems:'center' }}
+            >
+              <Text style={{ color:'#fff', fontWeight:'600' }}>Fermer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -172,16 +197,12 @@ export default function CaissesScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 15, backgroundColor: "#f4f6f9" },
   title: { fontSize: 22, fontWeight: "700", marginBottom: 15, color: "#2e86de", textAlign: "center", fontFamily: "Poppins_700Bold" },
-
   loader: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f1f5f9" },
   loaderLogo: { width: 200, height: 200, resizeMode: "contain" },
-
   tableHeader: { flexDirection: "row", backgroundColor: "#3498db", paddingVertical: 12, borderRadius: 8 },
   headerCell: { flex: 1, color: "#fff", fontWeight: "600", textAlign: "center", fontSize: 13, fontFamily: "Poppins_600SemiBold" },
-
   row: { flexDirection: "row", backgroundColor: "#fff", paddingVertical: 15, marginTop: 6, borderRadius: 8, elevation: 2, alignItems: "center" },
   cell: { flex: 1, textAlign: "center", fontSize: 13, fontFamily: "Poppins_400Regular" },
-
   actionButton: { flex: 1, backgroundColor: "#2563eb", paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5 },
   actionText: { color: "#fff", fontWeight: "600", marginLeft: 5, fontFamily: "Poppins_600SemiBold" },
 });

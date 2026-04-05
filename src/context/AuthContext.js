@@ -10,40 +10,28 @@ export const AuthProvider = ({ children }) => {
 
   // ================= LOGIN =================
   const login = async (email, password) => {
-    try {
-      const res = await API.post("/login", { email, password });
+    const res = await API.post("/login", { email, password });
 
-      const token = res.data.token;
-      if (!token) throw new Error("Token manquant !");
+    const token = res.data.token;
+    if (!token) throw new Error("Token manquant");
 
-      // Sauvegarder token
-      await AsyncStorage.setItem("token", token);
+    await AsyncStorage.setItem("token", token);
 
-      // Ajouter header global
-      API.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    API.defaults.headers.common["Authorization"] = `Bearer ${token}`;
 
-      // Récupérer user
-      const me = await API.get("/me");
+    const me = await API.get("/me");
+    const userData = me.data.user;
 
-      const userData = me.data.user;
+    await AsyncStorage.setItem("user", JSON.stringify(userData));
 
-      // 🔥 Sauvegarder user dans AsyncStorage
-      await AsyncStorage.setItem("user", JSON.stringify(userData));
-
-      setUser(userData);
-    } catch (err) {
-      console.error("Login error:", err.response?.data || err.message);
-      throw err;
-    }
+    setUser(userData); // 🔥 TRIGGER NAVIGATION
   };
 
   // ================= LOGOUT =================
   const logout = async () => {
     try {
       await API.post("/logout");
-    } catch (err) {
-      console.warn("Logout error:", err.response?.data);
-    }
+    } catch (err) {}
 
     await AsyncStorage.removeItem("token");
     await AsyncStorage.removeItem("user");
@@ -53,7 +41,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  // ================= CHECK USER AU DEMARRAGE =================
+  // ================= CHECK USER =================
   const checkUser = async () => {
     try {
       const token = await AsyncStorage.getItem("token");
@@ -68,16 +56,10 @@ export const AuthProvider = ({ children }) => {
       const res = await API.get("/me");
       const userData = res.data.user;
 
-      // 🔥 Mettre à jour AsyncStorage aussi
-      await AsyncStorage.setItem("user", JSON.stringify(userData));
-
       setUser(userData);
     } catch (err) {
-      console.error("checkUser error:", err.response?.data);
-
       await AsyncStorage.removeItem("token");
       await AsyncStorage.removeItem("user");
-
       setUser(null);
     } finally {
       setLoading(false);

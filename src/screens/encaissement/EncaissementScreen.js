@@ -1,75 +1,74 @@
-import React, { useEffect, useState, useRef, useContext } from "react";
+import React, { useEffect, useState, useContext, useRef } from "react";
 import {
   View,
   Text,
-  FlatList,
-  StyleSheet,
+  ScrollView,
   TouchableOpacity,
-  Modal,
+  ActivityIndicator,
   TextInput,
   Alert,
-  ActivityIndicator,
+  Modal,
+  StyleSheet,
   Animated,
-  ScrollView,
-  Platform
+  Pressable, // لإغلاق المودال بالضغط خارج المحتوى
 } from "react-native";
-
 import { Ionicons } from "@expo/vector-icons";
-
-import * as Sharing from "expo-sharing";
-import FileSystem from "expo-file-system";
 
 import { AuthContext } from "../../context/AuthContext";
 import {
   getEncaissements,
   createEncaissement,
-  deleteEncaissement
+  updateEncaissement,
+  deleteEncaissement,
 } from "../../services/encaissements.api";
 
-// Wrapper Victory pour mobile + web
-let VictoryChart, VictoryBar, VictoryLine, VictoryPie, VictoryTheme;
+// ===== LOADER =====
+function Loader({ loading }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
-if (Platform.OS === "web") {
-  const victory = require("victory");
-  VictoryChart = victory.VictoryChart;
-  VictoryBar = victory.VictoryBar;
-  VictoryLine = victory.VictoryLine;
-  VictoryPie = victory.VictoryPie;
-  VictoryTheme = victory.VictoryTheme;
-} else {
-  const victory = require("victory-native");
-  VictoryChart = victory.VictoryChart;
-  VictoryBar = victory.VictoryBar;
-  VictoryLine = victory.VictoryLine;
-  VictoryPie = victory.VictoryPie;
-  VictoryTheme = victory.VictoryTheme;
+  useEffect(() => {
+    if (loading) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+          Animated.timing(fadeAnim, { toValue: 0, duration: 800, useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      fadeAnim.setValue(0);
+    }
+  }, [loading, fadeAnim]);
+
+  if (!loading) return null;
+
+  return (
+    <View style={styles.loader}>
+      <Animated.Image
+        source={require("../../../assets/images/logo.png")}
+        style={[styles.loaderLogo, { opacity: fadeAnim }]}
+      />
+      <ActivityIndicator size="large" color="#2563eb" style={{ marginTop: 20 }} />
+    </View>
+  );
 }
 
+// ===== SCREEN =====
 export default function EncaissementScreen() {
   const { user } = useContext(AuthContext);
 
+  const [editMode, setEditMode] = useState(false);
+  const [selectedId, setSelectedId] = useState(null);
+
   const [encaissements, setEncaissements] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [filteredData, setFilteredData] = useState([]);
+  const [loading, setLoading] = useState(false);
+
   const [search, setSearch] = useState("");
-  const [sortType, setSortType] = useState("date_desc");
 
   const [modalVisible, setModalVisible] = useState(false);
   const [montant, setMontant] = useState("");
   const [rapport, setRapport] = useState("");
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  // Animation logo
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
-        Animated.timing(fadeAnim, { toValue: 0, duration: 600, useNativeDriver: true })
-      ])
-    ).start();
-  }, []);
-
-  // Fetch data
   useEffect(() => {
     fetchData();
   }, []);
@@ -77,216 +76,407 @@ export default function EncaissementScreen() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const data = await getEncaissements();
-      let enc = Array.isArray(data) ? data : [];
-
-      if (user.role === "gestionnaire") {
-        enc = enc.filter(e => e.caisse?.wilaya_id === user.wilaya_id);
-      }
-
-      setEncaissements(enc);
-    } catch (e) {
+      const data = await getEncaissements(user.caisse_id);
+      setEncaissements(data);
+      setFilteredData(data);
+    } catch (error) {
+      console.log(error);
       Alert.alert("Erreur", "Chargement impossible");
     } finally {
       setLoading(false);
     }
   };
 
+  // 🔍 SEARCH
+  const handleSearch = (text) => {
+    setSearch(text);
+    const filtered = encaissements.filter((e) =>
+      (e.rapport?.toLowerCase() || "").includes(text.toLowerCase()) ||
+      (e.par?.toLowerCase() || "").includes(text.toLowerCase())
+    );
+    setFilteredData(filtered);
+  };
+
+  const resetForm = () => {
+    setMontant("");
+    setRapport("");
+    setSelectedId(null);
+    setEditMode(false);
+  };
+
   const handleCreate = async () => {
-    if (!montant) return Alert.alert("Erreur", "Entrer un montant");
+    if (!montant || !rapport) {
+      return Alert.alert("Erreur", "Tous les champs sont obligatoires");
+    }
 
     try {
-      await createEncaissement({ montant: parseFloat(montant), rapport });
-      setMontant("");
-      setRapport("");
+      const data = {
+        caisse_id: user.caisse_id,
+        user_id: user.id,
+        montant: parseFloat(montant),
+        rapport: rapport.trim(),
+      };
+
+      await createEncaissement(data);
+
+      resetForm();
       setModalVisible(false);
       fetchData();
-    } catch {
-      Alert.alert("Erreur création");
+    } catch (error) {
+      console.log("ERREUR CREATE:", error.response?.data);
+      Alert.alert("Erreur", JSON.stringify(error.response?.data) || "Erreur lors de la création");
     }
   };
 
-  const handleDelete = id => {
-    Alert.alert("Confirmation", "Supprimer cet encaissement ?", [
-      { text: "Annuler" },
-      {
-        text: "Supprimer",
-        onPress: async () => {
-          await deleteEncaissement(id);
-          fetchData();
-        }
-      }
-    ]);
+  const handleEdit = (item) => {
+    setEditMode(true);
+    setSelectedId(item.id);
+    setMontant(String(item.montant));
+    setRapport(item.rapport || "");
+    setModalVisible(true);
   };
 
-  const filteredData = encaissements
-    .filter(item => {
-      const text = search.toLowerCase();
-      return item.rapport?.toLowerCase().includes(text) || item.caisse?.nom?.toLowerCase().includes(text);
-    })
-    .sort((a, b) => {
-      if (sortType === "montant_desc") return b.montant - a.montant;
-      if (sortType === "montant_asc") return a.montant - b.montant;
-      if (sortType === "date_asc") return new Date(a.created_at) - new Date(b.created_at);
-      return new Date(b.created_at) - new Date(a.created_at);
-    });
+  const handleUpdate = async () => {
+    if (!montant || !rapport) {
+      return Alert.alert("Erreur", "Tous les champs sont obligatoires");
+    }
 
-  // Export CSV mobile + web
-  const exportCSV = async () => {
-    let csv = "Date,Caisse,Montant,Rapport\n";
-    filteredData.forEach(e => {
-      csv += `${e.created_at},${e.caisse?.nom},${e.montant},${e.rapport}\n`;
-    });
+    try {
+      const data = {
+        montant: parseFloat(montant),
+        rapport: rapport.trim(),
+      };
 
-    if (Platform.OS === "web") {
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", "encaissements.csv");
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } else {
-      const path = FileSystem.cacheDirectory + "encaissements.csv";
-      await FileSystem.writeAsStringAsync(path, csv);
-      await Sharing.shareAsync(path);
+      await updateEncaissement(selectedId, data);
+
+      resetForm();
+      setModalVisible(false);
+      fetchData();
+    } catch (error) {
+      console.log("UPDATE ERROR:", error.response?.data);
+      Alert.alert("Erreur", "Modification impossible");
     }
   };
 
-  const chartData = filteredData.map(e => ({ x: new Date(e.created_at).toLocaleDateString(), y: e.montant }));
-
-  if (loading) {
-    return (
-      <View style={styles.loader}>
-        <Animated.Image source={require("../../../assets/images/logo.png")} style={[styles.logo, { opacity: fadeAnim }]} />
-        <ActivityIndicator size="large" color="#2563eb" />
-      </View>
+  const handleDelete = (id) => {
+    Alert.alert(
+      "Confirmation",
+      "Voulez-vous vraiment supprimer cet encaissement ?",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Supprimer",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteEncaissement(id);
+              fetchData();
+            } catch (error) {
+              console.log("DELETE ERROR:", error);
+              Alert.alert("Erreur", "Suppression impossible");
+            }
+          },
+        },
+      ]
     );
-  }
+  };
+
+  // إغلاق المودال وإعادة تعيين النموذج
+  const closeModal = () => {
+    resetForm();
+    setModalVisible(false);
+  };
+
+  if (loading) return <Loader loading={loading} />;
 
   return (
     <View style={styles.container}>
-      <ScrollView>
-        <Text style={styles.title}>Gestion Encaissements</Text>
+      {/* HEADER */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Mes Encaissements</Text>
+      </View>
 
-        {/* Search */}
-        <TextInput placeholder="Recherche caisse / rapport" style={styles.search} value={search} onChangeText={setSearch} />
-
-        {/* Sort */}
-        <View style={styles.sortRow}>
-          <TouchableOpacity onPress={() => setSortType("montant_desc")}>
-            <Text style={styles.sortBtn}>Montant ↓</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setSortType("montant_asc")}>
-            <Text style={styles.sortBtn}>Montant ↑</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setSortType("date_desc")}>
-            <Text style={styles.sortBtn}>Date ↓</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setSortType("date_asc")}>
-            <Text style={styles.sortBtn}>Date ↑</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Charts */}
-        <Text style={styles.chartTitle}>Statistiques</Text>
-
-        <VictoryChart theme={VictoryTheme ? VictoryTheme.material : undefined}>
-          <VictoryBar data={chartData} />
-        </VictoryChart>
-
-        <VictoryChart theme={VictoryTheme ? VictoryTheme.material : undefined}>
-          <VictoryLine data={chartData} />
-        </VictoryChart>
-
-        <VictoryPie data={chartData.slice(0, 5)} />
-
-        {/* Export */}
-        <TouchableOpacity style={styles.exportBtn} onPress={exportCSV}>
-          <Ionicons name="download" size={18} color="#fff" />
-          <Text style={styles.exportText}>Exporter CSV</Text>
-        </TouchableOpacity>
-
-        {/* Table */}
-        <View style={styles.tableHeader}>
-          <Text style={styles.col1}>Date</Text>
-          <Text style={styles.col2}>Caisse</Text>
-          <Text style={styles.col3}>Montant</Text>
-          <Text style={styles.col4}>Actions</Text>
-        </View>
-
-        <FlatList
-          data={filteredData}
-          keyExtractor={item => item.id.toString()}
-          renderItem={({ item }) => (
-            <View style={styles.row}>
-              <Text style={styles.col1}>{new Date(item.created_at).toLocaleDateString()}</Text>
-              <Text style={styles.col2}>{item.caisse?.nom}</Text>
-              <Text style={styles.col3}>{item.montant} DA</Text>
-              <View style={styles.col4}>
-                <TouchableOpacity onPress={() => handleDelete(item.id)}>
-                  <Ionicons name="trash" size={20} color="red" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
+      {/* SEARCH */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color="#2e86de" />
+        <TextInput
+          style={styles.search}
+          placeholder="Rechercher par rapport ou nom..."
+          value={search}
+          onChangeText={handleSearch}
         />
+      </View>
+
+      {/* TABLE */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={styles.tableContainer}>
+          {/* TABLE HEADER */}
+          <View style={styles.tableHeader}>
+            {[
+              { label: "Montant", icon: "cash-outline" },
+              { label: "Rapport", icon: "document-text-outline" },
+              { label: "Date", icon: "calendar-outline" },
+              { label: "Par", icon: "person-outline" },
+              { label: "Action", icon: "settings-outline" },
+            ].map((h, i) => (
+              <View key={i} style={styles.th}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                  <Ionicons name={h.icon} size={16} color="#2e86de" />
+                  <Text style={styles.thText}>{h.label}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {/* TABLE ROWS */}
+          {filteredData.length === 0 ? (
+            <View style={{ padding: 20, alignItems: "center" }}>
+              <Text>Aucun encaissement trouvé</Text>
+            </View>
+          ) : (
+            filteredData.map((item) => (
+              <View key={item.id} style={styles.tableRow}>
+                <Text style={styles.td}>{item.montant} DA</Text>
+                <Text style={styles.td}>{item.rapport}</Text>
+                <Text style={styles.td}>
+                  {item.date_creation ? item.date_creation.split("T")[0] : "-"}
+                </Text>
+                <Text style={styles.td}>{item.par || "—"}</Text>
+
+                <View style={styles.actions}>
+                  <TouchableOpacity onPress={() => handleEdit(item)}>
+                    <Ionicons name="pencil-outline" size={20} color="orange" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleDelete(item.id)}>
+                    <Ionicons name="trash-outline" size={20} color="red" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))
+          )}
+        </View>
       </ScrollView>
 
-      {/* FAB */}
-      <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
+      {/* FAB - Ajouter */}
+      <TouchableOpacity style={styles.fab} onPress={() => {
+        resetForm();
+        setModalVisible(true);
+      }}>
         <Ionicons name="add" size={30} color="#fff" />
       </TouchableOpacity>
 
-      {/* Modal */}
-      <Modal visible={modalVisible} animationType="slide">
-        <View style={styles.modal}>
-          <Text style={styles.modalTitle}>Nouvel Encaissement</Text>
-          <TextInput
-            placeholder="Montant DA"
-            keyboardType="numeric"
-            value={montant}
-            onChangeText={setMontant}
-            style={styles.input}
-          />
-          <TextInput placeholder="Rapport" value={rapport} onChangeText={setRapport} style={styles.input} />
+      {/* MODAL */}
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeModal}
+      >
+        <Pressable style={styles.modalOverlay} onPress={closeModal}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {editMode ? "Modifier l'Encaissement" : "Nouvel Encaissement"}
+            </Text>
 
-          <TouchableOpacity style={styles.save} onPress={handleCreate}>
-            <Text style={styles.saveText}>Enregistrer</Text>
-          </TouchableOpacity>
+            <TextInput
+              placeholder="Montant (DA)"
+              value={montant}
+              onChangeText={setMontant}
+              keyboardType="numeric"
+              style={styles.input}
+            />
 
-          <TouchableOpacity onPress={() => setModalVisible(false)}>
-            <Text style={styles.cancel}>Annuler</Text>
-          </TouchableOpacity>
-        </View>
+            <TextInput
+              placeholder="Rapport / Description"
+              value={rapport}
+              onChangeText={setRapport}
+              multiline
+              numberOfLines={3}
+              style={[styles.input, { height: 80, textAlignVertical: "top" }]}
+            />
+
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={editMode ? handleUpdate : handleCreate}
+            >
+              <Text style={styles.saveText}>
+                {editMode ? "Mettre à jour" : "Enregistrer"}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.cancelButton} onPress={closeModal}>
+              <Text style={styles.cancelText}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
       </Modal>
     </View>
   );
 }
 
+// ===== STYLES =====
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f1f5f9", padding: 15 },
-  title: { fontSize: 22, fontWeight: "bold", marginBottom: 10 },
-  search: { backgroundColor: "#fff", padding: 10, borderRadius: 8, marginBottom: 10 },
-  sortRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
-  sortBtn: { color: "#2563eb", fontWeight: "bold" },
-  chartTitle: { fontWeight: "bold", marginTop: 20, marginBottom: 10 },
-  exportBtn: { backgroundColor: "#2563eb", flexDirection: "row", alignItems: "center", justifyContent: "center", padding: 10, borderRadius: 8, marginVertical: 10 },
-  exportText: { color: "#fff", marginLeft: 5 },
-  tableHeader: { flexDirection: "row", backgroundColor: "#2563eb", padding: 10, borderRadius: 8 },
-  row: { flexDirection: "row", backgroundColor: "#fff", padding: 10, borderBottomWidth: 1, borderColor: "#eee" },
-  col1: { flex: 2, color: "#333" },
-  col2: { flex: 2 },
-  col3: { flex: 2, fontWeight: "bold" },
-  col4: { flex: 1, alignItems: "center" },
-  fab: { position: "absolute", bottom: 25, right: 25, backgroundColor: "#2563eb", width: 60, height: 60, borderRadius: 30, justifyContent: "center", alignItems: "center", elevation: 4 },
-  modal: { flex: 1, padding: 20 },
-  modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 20 },
-  input: { borderWidth: 1, borderColor: "#ddd", padding: 10, borderRadius: 8, marginBottom: 10 },
-  save: { backgroundColor: "#2563eb", padding: 15, borderRadius: 8, alignItems: "center" },
-  saveText: { color: "#fff", fontWeight: "bold" },
-  cancel: { textAlign: "center", marginTop: 10 },
-  loader: { flex: 1, justifyContent: "center", alignItems: "center" },
-  logo: { width: 180, height: 180, marginBottom: 20, resizeMode: "contain" }
+  container: { flex: 1, padding: 20, backgroundColor: "#f4f8fb" },
+
+  loader: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  loaderLogo: {
+    width: 200,
+    height: 200,
+    resizeMode: "contain",
+  },
+
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 15,
+    gap: 10,
+  },
+
+  title: {
+    fontSize: 22,
+    fontFamily: "Poppins-Bold",
+    color: "#2e86de",
+  },
+
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#d6e6f9",
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 15,
+  },
+
+  search: {
+    marginLeft: 10,
+    flex: 1,
+    fontFamily: "Poppins-Regular",
+  },
+
+  tableContainer: {
+    borderWidth: 1,
+    borderColor: "#d6e6f9",
+    borderRadius: 10,
+    backgroundColor: "#fff",
+  },
+
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#d6e6f9",
+    padding: 12,
+  },
+
+  th: { width: 130, paddingHorizontal: 5 },
+
+  thText: {
+    fontFamily: "Poppins-Bold",
+    color: "#2e86de",
+    fontSize: 14,
+  },
+
+  tableRow: {
+    flexDirection: "row",
+    padding: 12,
+    borderBottomWidth: 1,
+    borderColor: "#eee",
+  },
+
+  td: {
+    width: 130,
+    fontFamily: "Poppins-Regular",
+    color: "#000",
+    paddingHorizontal: 5,
+  },
+
+  actions: {
+    flexDirection: "row",
+    gap: 20,
+    width: 80,
+    justifyContent: "flex-start",
+  },
+
+  fab: {
+    position: "absolute",
+    bottom: 30,
+    right: 30,
+    backgroundColor: "#0c4d8b",
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  modalContent: {
+    width: "90%",
+    backgroundColor: "#fff",
+    borderRadius: 15,
+    padding: 20,
+    elevation: 10,
+  },
+
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: "Poppins-Bold",
+    marginBottom: 20,
+    textAlign: "center",
+    color: "#2e86de",
+  },
+
+  input: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 15,
+    fontFamily: "Poppins-Regular",
+  },
+
+  saveButton: {
+    backgroundColor: "#22c55e",
+    padding: 15,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 10,
+  },
+
+  saveText: {
+    color: "#fff",
+    fontFamily: "Poppins-Bold",
+    fontSize: 16,
+  },
+
+  cancelButton: {
+    backgroundColor: "#ef4444",
+    padding: 15,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 10,
+  },
+
+  cancelText: {
+    color: "#fff",
+    fontFamily: "Poppins-Bold",
+    fontSize: 16,
+  },
 });
